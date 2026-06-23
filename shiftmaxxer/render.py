@@ -140,6 +140,9 @@ def build_payload(sched: Schedule, log: list[CycleResult],
                 "partnerDelta": round(res.deltas.get(partner, 0), 4) if partner else 0.0,
             })
 
+    for n in swaps:
+        swaps[n].sort(key=lambda sw: max(sw["delta"], sw["partnerDelta"]), reverse=True)
+
     return {
         "residents": {
             n: _resident_metrics(r, orig_shifts_by_name.get(n, []), final_shifts_by_name.get(n, []), timeline)

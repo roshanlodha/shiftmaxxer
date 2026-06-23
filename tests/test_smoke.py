@@ -14,7 +14,7 @@ def test_load_preferences_normalization():
         # Roshan has MGH (weight 1), Morning (weight 0.5), days_weight 1.
         # Under IGNORE_WEIGHT = True, all three are overridden to 1.0.
         # Sum = 3.0. Normalized weights should be 1/3 each.
-        roshan = residents["roshan lodha"]
+        roshan = residents["roshan"]
         assert abs(roshan.loc_weight - 1/3) < 1e-6
         assert abs(roshan.type_weight - 1/3) < 1e-6
         assert abs(roshan.days_weight - 1/3) < 1e-6
@@ -46,7 +46,7 @@ def test_resident_metrics_payload():
     log = optimize(sched, max_swaps_per_person=-1, n_max=2)
     payload = build_payload(sched, log, original_assignment)
     
-    roshan = payload["residents"]["roshan lodha"]
+    roshan = payload["residents"]["roshan"]
     assert "loc" in roshan
     assert "orig" in roshan["loc"]
     assert "opt" in roshan["loc"]
@@ -240,5 +240,38 @@ def test_start_date_filtering():
         assert has_earlier, "Should have shifts before June 29 when START_DATE is empty"
     finally:
         config.START_DATE = orig_start_date
+
+
+def test_swap_limit_enforced_for_beneficiary():
+    from collections import Counter
+    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    log = optimize(sched, max_swaps_per_person=1, n_max=2)
+    
+    # Count swaps where each resident is the beneficiary (gains most).
+    # Only beneficiary swaps count toward cap; passive swaps are uncapped.
+    beneficiary_counts = Counter()
+    for res in log:
+        beneficiary = max(sorted(res.deltas.keys()), key=lambda n: res.deltas[n])
+        beneficiary_counts[beneficiary] += 1
+            
+    for name, count in beneficiary_counts.items():
+        assert count <= 1, f"Resident {name} is beneficiary in {count} swaps, exceeds cap of 1"
+
+
+def test_swap_sorting_by_max_happiness():
+    from shiftmaxxer.render import build_payload
+    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
+    # Let's get some log of swaps
+    log = optimize(sched, max_swaps_per_person=-1, n_max=2)
+    payload = build_payload(sched, log, original_assignment)
+    
+    # Check that for each resident, the swaps list is sorted by max(delta, partnerDelta) descending
+    for name, swaps_list in payload["swaps"].items():
+        if len(swaps_list) > 1:
+            max_deltas = [max(sw["delta"], sw["partnerDelta"]) for sw in swaps_list]
+            # Ensure it is sorted descending
+            assert max_deltas == sorted(max_deltas, reverse=True), f"Swaps for {name} not sorted descending by max happiness gained: {max_deltas}"
+
 
 

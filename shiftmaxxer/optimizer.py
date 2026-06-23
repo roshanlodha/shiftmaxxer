@@ -80,6 +80,8 @@ def optimize(sched: Schedule, max_swaps_per_person: int, n_max: int) -> list[Cyc
             if res is None:
                 continue
             # Per-person cap check (-1 = unlimited)
+            # Only the beneficiary (person who gains most) counts against the cap.
+            # "Passive" swaps where the partner benefits more are uncapped.
             if max_swaps_per_person != -1:
                 beneficiary = max(sorted(res.deltas.keys()), key=lambda n: res.deltas[n])
                 if swap_count[beneficiary] + 1 > max_swaps_per_person:
