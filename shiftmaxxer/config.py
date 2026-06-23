@@ -49,4 +49,4 @@ IGNORE_WEIGHT = False
 # --- Start Date Filter ---
 # Empty string corresponds to allowing all dates, otherwise should be a datetime object.
 # Before this date, all scheduled shifts should be tossed out.
-START_DATE = datetime(2026, 6, 29)
+START_DATE = ""
