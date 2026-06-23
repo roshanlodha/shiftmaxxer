@@ -54,16 +54,29 @@ def _count_violations(shifts: list[Shift]) -> int:
     return rest + streak
 
 
+def _has_overlap(shifts: list[Shift]) -> bool:
+    """Return True if any two shifts have overlapping time windows."""
+    ordered = sorted(shifts, key=lambda s: s.t_start)
+    for a, b in zip(ordered, ordered[1:]):
+        if b.t_start < a.t_end:
+            return True
+    return False
+
+
 def is_valid_swap(proposed: list[Shift], current: list[Shift],
                   days_off: frozenset[date]) -> bool:
     """A swap is acceptable if it does not WORSEN feasibility relative to the
     resident's current schedule. Real-world rosters frequently carry pre-existing
     rest violations (e.g. an 11a-8p shift followed by a next-day 7a shift = 11h
     rest); those are grandfathered. Day-off remains an absolute hard constraint:
-    a proposed shift may never land on a declared day off."""
+    a proposed shift may never land on a declared day off. Overlapping shifts
+    (double-booking) are also an absolute hard constraint and are never allowed."""
     # Day-off: always hard, never allowed.
     for s in proposed:
         if s.work_date in days_off:
             return False
+    # Overlapping shifts: always hard, never allowed regardless of prior state.
+    if _has_overlap(proposed):
+        return False
     # Rest + streak: only reject if the swap introduces NEW violations.
     return _count_violations(proposed) <= _count_violations(current)

@@ -177,6 +177,58 @@ A stronger, fully independent variant is possible and is left as future work. We
 
 ---
 
-## 8. Conclusion
+## 8. Future Directions
+
+The current preference model rests on three dimensions: location, time of day, and streak length. Each treats a shift as an indivisible, equally-weighted unit of work. In practice, residents care not only about *where* and *when* they work but about *how much* a given shift costs them, and that cost varies systematically with shift length, the calendar position of the shift, and whether it falls overnight. The following extensions enrich the satisfaction model along these axes. Crucially, each one slots into the existing trade-graph machinery without altering the core guarantees of Section 6: as long as every new term enters $U_i$ as a bounded score and the per-edge utility test $U_i(A_i')\ge U_i(A_i)$ is preserved, Legality, Pareto improvement, Termination, and No shift chaining all continue to hold unchanged.
+
+### 8.1 Factoring in shift lengths
+
+**Motivation.** The mechanism currently treats a 8-hour shift and a 12-hour shift as interchangeable units. A 1-for-1 swap can therefore silently hand a resident more total hours even though workload is "conserved" in the sense of shift *count*. Residents experience a long shift as more burdensome than a short one, and a fair exchange should account for this asymmetry.
+
+**Proposed plan.**
+
+1. **Data.** Augment each shift $s$ with its duration $\ell(s)$ in hours, already implicitly available from the start/end times used in the rest-period check of Section 3.
+2. **Duration-aware satisfaction.** Introduce a fourth normalized score $\phi_{\text{len}}(A_i)\in[0,1]$ that penalizes deviation of a resident's shift durations from a preferred shift length $p_{\text{len},i}$ (or rewards shorter shifts if the resident expresses a "minimize hours" preference), constructed analogously to the streak score:
+   $$
+   \phi_{\text{len}}(A_i)=\max\!\left(0,\;1-\frac{1}{\gamma\,|A_i|}\sum_{s\in A_i}\bigl|\,\ell(s)-p_{\text{len},i}\bigr|\right),
+   $$
+   where $\gamma$ is the maximum possible per-shift duration deviation, guaranteeing $\phi_{\text{len}}\in[0,1]$. A resident expressing no length preference receives $\phi_{\text{len}}=1$.
+3. **Weight integration.** Extend the per-resident weight normalization to $w_{\text{loc},i}+w_{\text{type},i}+w_{\text{str},i}+w_{\text{len},i}=1$, and add the new term to $U_i$.
+4. **Optional hard guard.** For programs that must conserve *hours*, not just shift counts, add a feasibility predicate that rejects any trade whose net hour delta for a resident exceeds a tolerance $\tau$ (e.g. $\pm 4$ hours). This converts duration-fairness from a soft preference into a hard constraint, at the cost of pruning otherwise Pareto-improving trades.
+
+### 8.2 Factoring in weekend / holiday vs. weekday
+
+**Motivation.** A Saturday shift and a Tuesday shift are nominally identical units of work but carry very different opportunity costs. Most residents strongly prefer to offload weekend and holiday shifts; a swap that quietly moves a holiday shift onto an unwilling resident, while legal and count-neutral, is socially undesirable. Conversely, some residents actively prefer weekend work (e.g. to keep weekdays free). The model should let residents express this and should value such trades accordingly.
+
+**Proposed plan.**
+
+1. **Calendar classification.** Tag each shift $s$ with a categorical label $\mathrm{cal}(s)\in\{\text{weekday},\text{weekend},\text{holiday}\}$, derived from its date and a configurable holiday calendar (a simple date set; institution-specific holidays such as program retreat days can be appended).
+2. **Preference elicitation.** Add a preference field capturing the resident's stance on premium days, e.g. a target fraction $p_{\text{cal},i}$ of weekend/holiday shifts, or a simpler categorical "prefer fewer / indifferent / prefer more."
+3. **Satisfaction score.** Define $\phi_{\text{cal}}(A_i)\in[0,1]$ measuring agreement between the resident's realized weekend/holiday load and their stated preference. For a "prefer fewer" resident this is $1-(\text{fraction of premium shifts})$ (clamped), and for "prefer more" the complement; an indifferent resident scores $1$.
+4. **Weight integration.** Add $w_{\text{cal},i}$ to the normalized weight sum, exactly as in 8.1.
+5. **Holiday equity reporting (optional, no model change).** Independently of utility, surface a per-resident tally of weekend/holiday shifts before and after the recommended trade set, so a chief can confirm the mechanism is not concentrating premium days on a few residents. This is a transparency feature layered on top of the existing output and requires no change to the trade search.
+
+### 8.3 Factoring in overnights
+
+**Motivation.** Overnights are already special-cased structurally: Section 2.1 isolates them so they may only be traded for other overnights, preserving the base schedule's nightly staffing. But isolation only governs *which* trades are legal; it says nothing about how *costly* an overnight is to the resident working it. An overnight imposes a circadian burden that is poorly captured by either the time-of-day score (which is satisfied as soon as an overnight-preferring resident gets any overnight) or the streak score (which counts a night the same as a day). Overnights deserve an explicit, separately tunable weight, conceptually nested within the broader notion of shift "cost" introduced in 8.1.
+
+**Proposed plan.**
+
+1. **Burden weighting, not just type matching.** Rather than treating "Overnight" purely as a categorical time-of-day value, attach to each shift an effective-burden multiplier $\rho(s)$ that scales an overnight's contribution above that of a same-length day shift (e.g. $\rho_{\text{night}}=1.3$, $\rho_{\text{day}}=1.0$). This multiplier is the natural home for the "overnights cost more than their clock hours suggest" intuition.
+2. **Coupling with the length score.** Fold $\rho(s)$ into the duration term of 8.1 by replacing the raw duration $\ell(s)$ with an *effective duration* $\tilde{\ell}(s)=\rho(s)\,\ell(s)$ wherever shift cost is accumulated. This realizes the user's intent that overnight weighting "be considered within the shift-length weight": a 10-hour overnight then carries the burden of a 13-hour day shift, and the duration-fairness machinery of 8.1 automatically accounts for it without a separate normalization term.
+3. **Standalone overnight preference (optional).** For residents whose feelings about nights are not reducible to burden hours, additionally expose an explicit $\phi_{\text{night}}(A_i)\in[0,1]$ scoring agreement between their realized overnight count and a preferred count $p_{\text{night},i}$, with its own weight $w_{\text{night},i}$. This is the most flexible but also the most elicitation-heavy option; the burden-multiplier route (steps 1–2) is the recommended default because it adds expressiveness with no new survey questions.
+4. **Consecutive-nights guard (optional hard constraint).** Because clustered overnights are a known fatigue and safety concern, optionally add a feasibility predicate bounding the longest run of consecutive overnight shifts, analogous to the maximum-streak rule of Section 3. This keeps the mechanism from assembling a punishing string of nights even when each individual trade is locally preferred.
+
+### 8.4 Cross-cutting implementation notes
+
+All three extensions share the same integration pattern and therefore the same risk profile:
+
+- **Score, then weight, then test.** Each new dimension is added as a bounded score in $[0,1]$, given a per-resident weight folded into the unit-sum normalization of Section 2.2, and then automatically respected by the existing per-edge test $U_i(A_i')\ge U_i(A_i)$. No change to the cycle-enumeration or greedy-application logic is required.
+- **Guarantees are preserved by construction.** Section 6's proofs depend only on (i) feasibility being checked per participant and (ii) utility being non-decreasing per participant. Any added soft score leaves both intact; any added *hard* guard (the optional hour-tolerance, consecutive-nights, or holiday-equity constraints) only ever *shrinks* the edge set, so Legality and Termination still hold and Pareto improvement is unaffected.
+- **Elicitation cost is the real constraint.** The limiting factor is not algorithmic but human: every new weight is another question on the resident survey. A sensible rollout introduces shift length and overnight burden first (they can share a single "how much do long shifts and nights bother you?" elicitation via the effective-duration coupling of 8.3), and adds the weekend/holiday dimension as a second phase once the duration model is validated.
+
+---
+
+## 9. Conclusion
 
 We framed resident schedule improvement not as a re-optimization problem but as a *trade discovery* problem, and solved it with a bounded, Pareto-improving cycle mechanism on a directed trade graph. The result is a tool that respects the existing schedule, never harms anyone, never breaks the rules, and explains every recommendation it makes. Two parameters, the swap budget $K$ and the cycle length $n_{\max}$, let a program control how many swaps are executed.
