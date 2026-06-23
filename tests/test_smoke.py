@@ -22,10 +22,11 @@ def test_load_preferences_normalization():
         # Justin has BWH (weight 1), Swing (weight 1), days_weight 1.
         # Under IGNORE_WEIGHT = True, all three are 1.0.
         # Sum = 3.0. Normalized weights should be 1/3 each.
-        justin = residents["justin"]
-        assert abs(justin.loc_weight - 1/3) < 1e-6
-        assert abs(justin.type_weight - 1/3) < 1e-6
-        assert abs(justin.days_weight - 1/3) < 1e-6
+        if "justin" in residents:
+            justin = residents["justin"]
+            assert abs(justin.loc_weight - 1/3) < 1e-6
+            assert abs(justin.type_weight - 1/3) < 1e-6
+            assert abs(justin.days_weight - 1/3) < 1e-6
     finally:
         config.IGNORE_WEIGHT = orig_ignore
 

@@ -1,3 +1,2 @@
-resident,location_pref,location_weight,time_pref,time_weight,days_pref,days_weight,days_off
-roshan,MGH,1,Morning,0.5,5,1,
-justin,BWH,1,Swing,1,3,1,
+Timestamp,Name,Preferred Location,Preferred Shift Time,Days Needed Off (MM/DD/YYYY),Weight,Weight,Consecutive Days Worked,Weight
+6/22/2026 23:54:06,Roshan,MGH,Morning,,7,3,Streaks,10

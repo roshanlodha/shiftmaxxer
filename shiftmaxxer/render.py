@@ -538,14 +538,10 @@ body {
 .week-grid {
   display: grid;
   grid-template-columns: 50px repeat(7, minmax(130px, 1fr));
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 0;
   padding: 12px;
   min-width: 1000px;
-}
-.week-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 .week-col-hdr {
   text-align: center;
@@ -553,6 +549,7 @@ body {
   background: var(--md-sys-color-surface-container);
   border-radius: var(--md-sys-shape-corner-small);
   transition: background-color 0.3s;
+  margin-bottom: 8px;
 }
 .week-col-hdr.today {
   background: var(--md-sys-color-primary-container);
@@ -578,18 +575,6 @@ body {
 .week-col-hdr.today .wch-date {
   color: var(--md-sys-color-on-primary-container);
 }
-.week-col-body {
-  background: var(--md-sys-color-surface-container-lowest);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: var(--md-sys-shape-corner-small);
-  padding: 6px;
-  transition: border-color 0.3s, background-color 0.3s;
-}
-.week-col-body.today-col {
-  border-color: var(--md-sys-color-primary);
-  border-width: 2px;
-  background: rgba(79, 70, 229, 0.02);
-}
 .week-empty {
   flex: 1;
   display: flex;
@@ -602,6 +587,10 @@ body {
   position: relative;
   height: 360px;
   margin-top: 6px;
+  transition: margin-top 0.3s;
+}
+.week-grid.has-allday .time-labels-col {
+  margin-top: 0px;
 }
 .time-label {
   position: absolute;
@@ -617,17 +606,44 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 6px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: none;
+  border-top-left-radius: var(--md-sys-shape-corner-small);
+  border-top-right-radius: var(--md-sys-shape-corner-small);
+  padding: 6px 6px 4px 6px;
+  transition: border-color 0.3s, background-color 0.3s;
 }
-.allday-container:empty {
-  display: none;
+.allday-container.today-allday {
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px 2px 0 2px;
+  background-color: rgba(79, 70, 229, 0.02);
 }
+
 .hourly-container {
   position: relative;
   height: 360px;
   background: linear-gradient(var(--calendar-grid-line) 1px, transparent 1px);
   background-size: 100% 15px; /* grid line every 1 hour (15px) */
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-corner-small);
+  padding: 6px;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+.hourly-container.today-hourly {
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
+  background-color: rgba(79, 70, 229, 0.02);
+}
+.hourly-container.split-bottom {
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-top: 0px;
+}
+.hourly-container.today-hourly.split-bottom {
+  border-width: 0 2px 2px 2px;
 }
 
 /* Shift card */
@@ -1445,18 +1461,35 @@ function renderWeek() {
     + ', ' + my;
   document.getElementById('week-label').textContent = weekLbl;
 
-  // Render time labels column first
-  let weekHtml = '<div class="week-col" style="flex: 0 0 50px; min-width: 50px; gap: 0;">'
-    + '<div class="week-col-hdr" style="visibility: hidden; height: 52px; padding: 0;"></div>'
-    + '<div class="time-labels-col">'
+  // Check if there are any all-day shifts in the current week
+  let weekHasAllday = false;
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(monday, i);
+    const iso = dateToIso(day);
+    const entries = dm[iso] || [];
+    if (entries.some(e => e.part === 'all-day')) {
+      weekHasAllday = true;
+      break;
+    }
+  }
+
+  let gridHtml = '';
+
+  // 1. Time labels column elements
+  gridHtml += '<div class="week-col-hdr-spacer" style="grid-column: 1; grid-row: 1; visibility: hidden; height: 52px; padding: 0; margin-bottom: 8px;"></div>';
+  if (weekHasAllday) {
+    gridHtml += '<div class="time-labels-allday-spacer" style="grid-column: 1; grid-row: 2; height: 0;"></div>';
+  }
+  const timeLabelsRow = weekHasAllday ? 3 : 2;
+  gridHtml += '<div class="time-labels-col" style="grid-column: 1; grid-row: ' + timeLabelsRow + ';">'
     + '<div class="time-label" style="top: 0px;">12 AM</div>'
     + '<div class="time-label" style="top: 105px;">7 AM</div>'
     + '<div class="time-label" style="top: 180px;">12 PM</div>'
     + '<div class="time-label" style="top: 255px;">5 PM</div>'
     + '<div class="time-label" style="top: 345px;">11 PM</div>'
-    + '</div>'
     + '</div>';
 
+  // 2. Day columns elements
   for (let i = 0; i < 7; i++) {
     const day = addDays(monday, i);
     const iso = dateToIso(day);
@@ -1465,33 +1498,41 @@ function renderWeek() {
     const dateNum = day.getDate();
 
     const entries = dm[iso] || [];
-    
-    // Split into all-day (jeopardy) and timed
     const alldayEntries = entries.filter(e => e.part === 'all-day');
     const hourlyEntries = entries.filter(e => e.part !== 'all-day');
 
-    let alldayHtml = '';
-    if (alldayEntries.length > 0) {
-      alldayHtml = '<div class="allday-container">'
-        + alldayEntries.map(({ s, st }) => {
-          let cls = '';
-          let badge = '';
-          if (st === 'give') {
-            cls = ' sb-give';
-            badge = '<span class="sb-badge badge-give"><span class="material-symbols-outlined" style="font-size:10px">arrow_upward</span>Give</span>';
-          } else if (st === 'recv') {
-            cls = ' sb-recv';
-            badge = '<span class="sb-badge badge-recv"><span class="material-symbols-outlined" style="font-size:10px">arrow_downward</span>Recv</span>';
-          }
-          return '<div class="allday-card' + cls + '" title="' + s.summary + '">'
-            + '<div class="sb-title">' + s.summary + '</div>'
-            + badge
-            + '</div>';
-        }).join('')
+    const colIdx = i + 2;
+
+    // Header
+    gridHtml += '<div class="week-col-hdr' + (isToday ? ' today' : '') + '" style="grid-column: ' + colIdx + '; grid-row: 1;">'
+      + '<div class="wch-dow">' + dow + '</div>'
+      + '<div class="wch-date">' + dateNum + '</div>'
+      + '</div>';
+
+    if (weekHasAllday) {
+      // All-day container
+      let alldayCardsHtml = alldayEntries.map(({ s, st }) => {
+        let cls = '';
+        let badge = '';
+        if (st === 'give') {
+          cls = ' sb-give';
+          badge = '<span class="sb-badge badge-give"><span class="material-symbols-outlined" style="font-size:10px">arrow_upward</span>Give</span>';
+        } else if (st === 'recv') {
+          cls = ' sb-recv';
+          badge = '<span class="sb-badge badge-recv"><span class="material-symbols-outlined" style="font-size:10px">arrow_downward</span>Recv</span>';
+        }
+        return '<div class="allday-card' + cls + '" title="' + s.summary + '">'
+          + '<div class="sb-title">' + s.summary + '</div>'
+          + badge
+          + '</div>';
+      }).join('');
+
+      gridHtml += '<div class="allday-container' + (isToday ? ' today-allday' : '') + '" style="grid-column: ' + colIdx + '; grid-row: 2;">'
+        + alldayCardsHtml
         + '</div>';
     }
 
-    let hourlyHtml = '';
+    // Hourly container
     let cards = '';
     hourlyEntries.forEach(({ s, st, part }) => {
       let cls = st === 'give' ? 'sb-give' : st === 'recv' ? 'sb-recv' : s.loc === 'MGH' ? 'sb-mgh' : 'sb-bwh';
@@ -1505,12 +1546,10 @@ function renderWeek() {
       }
 
       if (part === 1) {
-        // Part 1: bottom slice (15px height from 11 PM to 12 AM)
         cards += '<div class="shift-card absolute-card part-1 ' + cls + '" style="top: ' + (s.startHour * 15) + 'px; height: 15px;" title="' + s.summary + '">'
           + '<div style="font-size:0.6rem; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">' + s.summary + ' (P1)</div>'
           + '</div>';
       } else if (part === 2) {
-        // Part 2: top chunk (from 12 AM to endHour)
         const height = s.endHour * 15;
         cards += '<div class="shift-card absolute-card ' + cls + '" style="top: 0px; height: ' + height + 'px;" title="' + s.summary + '">'
           + '<div class="sb-title">' + s.summary + ' (P2)</div>'
@@ -1519,7 +1558,6 @@ function renderWeek() {
           + badge
           + '</div>';
       } else {
-        // Normal timed shift
         const top = s.startHour * 15;
         const height = (s.endHour - s.startHour) * 15;
         cards += '<div class="shift-card absolute-card ' + cls + '" style="top: ' + top + 'px; height: ' + height + 'px;" title="' + s.summary + '">'
@@ -1531,22 +1569,14 @@ function renderWeek() {
       }
     });
 
-    hourlyHtml = '<div class="hourly-container">' + cards + '</div>';
-
-    weekHtml += '<div class="week-col">'
-      + '<div class="week-col-hdr' + (isToday ? ' today' : '') + '">'
-      + '<div class="wch-dow">' + dow + '</div>'
-      + '<div class="wch-date">' + dateNum + '</div>'
-      + '</div>'
-      + '<div class="week-col-body' + (isToday ? ' today-col' : '') + '">' 
-      + alldayHtml
-      + hourlyHtml
-      + '</div>'
+    const hourlyRow = weekHasAllday ? 3 : 2;
+    gridHtml += '<div class="hourly-container' + (isToday ? ' today-hourly' : '') + (weekHasAllday ? ' split-bottom' : '') + '" style="grid-column: ' + colIdx + '; grid-row: ' + hourlyRow + ';">'
+      + cards
       + '</div>';
   }
 
   document.getElementById('week-view').innerHTML =
-    '<div class="week-grid">' + weekHtml + '</div>';
+    '<div class="week-grid' + (weekHasAllday ? ' has-allday' : '') + '">' + gridHtml + '</div>';
 }
 
 /* ── Swap Cards ── */

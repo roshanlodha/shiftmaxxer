@@ -63,7 +63,7 @@ def parse_ics_file(path: Path, owner: str) -> list[Shift]:
 def load_all_ics(ics_dir: Path) -> list[Shift]:
     out = []
     for p in sorted(ics_dir.glob("*.ics")):
-        out.extend(parse_ics_file(p, owner=p.stem))
+        out.extend(parse_ics_file(p, owner=p.stem.lower().strip()))
     return out
 
 
@@ -82,6 +82,23 @@ def _norm_pref(value: str, allowed: set[str]) -> str:
 
 def load_preferences(csv_path) -> dict[str, Resident]:
     df = pd.read_csv(csv_path)
+    expected_cols = [
+        "timestamp",
+        "resident",
+        "location_pref",
+        "time_pref",
+        "days_off",
+        "location_weight",
+        "time_weight",
+        "days_pref",
+        "days_weight",
+    ]
+    if len(df.columns) == len(expected_cols):
+        df.columns = expected_cols
+    else:
+        raise ValueError(
+            f"Expected {len(expected_cols)} columns in preferences CSV, found {len(df.columns)}: {list(df.columns)}"
+        )
     residents = {}
     for _, row in df.iterrows():
         loc_pref = _norm_pref(row["location_pref"], {"MGH", "BWH"})
@@ -103,11 +120,18 @@ def load_preferences(csv_path) -> dict[str, Resident]:
         if total > 0:
             w_loc, w_typ, w_str = w_loc/total, w_typ/total, w_str/total
 
-        residents[str(row["resident"])] = Resident(
-            name=str(row["resident"]),
+        try:
+            days_pref_val = int(float(row["days_pref"]))
+            days_pref_val = int(max(3, min(6, days_pref_val)))
+        except (ValueError, TypeError):
+            days_pref_val = 5
+
+        name = str(row["resident"]).lower().strip()
+        residents[name] = Resident(
+            name=name,
             loc_pref=loc_pref, loc_weight=w_loc,
             type_pref=type_pref, type_weight=w_typ,
-            days_pref=int(max(3, min(6, int(row["days_pref"])))),
+            days_pref=days_pref_val,
             days_weight=w_str,
             days_off=_parse_days_off(row["days_off"]),
         )

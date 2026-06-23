@@ -377,14 +377,10 @@ body {
 .week-grid {
   display: grid;
   grid-template-columns: 50px repeat(7, minmax(130px, 1fr));
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 0;
   padding: 12px;
   min-width: 1000px;
-}
-.week-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 .week-col-hdr {
   text-align: center;
@@ -392,6 +388,7 @@ body {
   background: var(--md-sys-color-surface-container);
   border-radius: var(--md-sys-shape-corner-small);
   transition: background-color 0.3s;
+  margin-bottom: 8px;
 }
 .week-col-hdr.today {
   background: var(--md-sys-color-primary-container);
@@ -417,18 +414,6 @@ body {
 .week-col-hdr.today .wch-date {
   color: var(--md-sys-color-on-primary-container);
 }
-.week-col-body {
-  background: var(--md-sys-color-surface-container-lowest);
-  border: 1px solid var(--md-sys-color-outline-variant);
-  border-radius: var(--md-sys-shape-corner-small);
-  padding: 6px;
-  transition: border-color 0.3s, background-color 0.3s;
-}
-.week-col-body.today-col {
-  border-color: var(--md-sys-color-primary);
-  border-width: 2px;
-  background: rgba(79, 70, 229, 0.02);
-}
 .week-empty {
   flex: 1;
   display: flex;
@@ -441,6 +426,10 @@ body {
   position: relative;
   height: 360px;
   margin-top: 6px;
+  transition: margin-top 0.3s;
+}
+.week-grid.has-allday .time-labels-col {
+  margin-top: 0px;
 }
 .time-label {
   position: absolute;
@@ -456,17 +445,44 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 6px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: none;
+  border-top-left-radius: var(--md-sys-shape-corner-small);
+  border-top-right-radius: var(--md-sys-shape-corner-small);
+  padding: 6px 6px 4px 6px;
+  transition: border-color 0.3s, background-color 0.3s;
 }
-.allday-container:empty {
-  display: none;
+.allday-container.today-allday {
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px 2px 0 2px;
+  background-color: rgba(79, 70, 229, 0.02);
 }
+
 .hourly-container {
   position: relative;
   height: 360px;
   background: linear-gradient(var(--calendar-grid-line) 1px, transparent 1px);
   background-size: 100% 15px; /* grid line every 1 hour (15px) */
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-corner-small);
+  padding: 6px;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+.hourly-container.today-hourly {
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
+  background-color: rgba(79, 70, 229, 0.02);
+}
+.hourly-container.split-bottom {
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding-top: 0px;
+}
+.hourly-container.today-hourly.split-bottom {
+  border-width: 0 2px 2px 2px;
 }
 
 /* Shift card */
@@ -1028,11 +1044,11 @@ const DATA = {
       "daysOff": [],
       "loc": {
         "orig": 53,
-        "opt": 67
+        "opt": 71
       },
       "type": {
         "orig": 33,
-        "opt": 53
+        "opt": 50
       },
       "streak": {
         "orig": 1.7,
@@ -1045,25 +1061,25 @@ const DATA = {
     },
     "justin": {
       "name": "justin",
-      "locPref": "BWH",
-      "typePref": "Swing",
-      "daysPref": 3,
+      "locPref": "ANY",
+      "typePref": "ANY",
+      "daysPref": 4,
       "daysOff": [],
       "loc": {
-        "orig": 47,
-        "opt": 60
+        "orig": 100,
+        "opt": 100
       },
       "type": {
-        "orig": 53,
-        "opt": 73
+        "orig": 100,
+        "opt": 100
       },
       "streak": {
         "orig": 1.9,
         "opt": 1.9
       },
       "happiness": {
-        "orig": 57,
-        "opt": 68
+        "orig": 0,
+        "opt": 0
       }
     }
   },
@@ -1455,77 +1471,77 @@ const DATA = {
   },
   "originalAssignment": {
     "roshan": [
-      "2583d041-c479-46b0-b1c3-e12f5e21e57d",
-      "6952a8f7-56f9-44a7-a23b-9e1192dfb08b",
-      "9e8f53c6-1ed7-40ed-92cf-3c23682f963c",
-      "a6661004-baca-4ddd-99be-1065353d2543",
-      "76e63094-d2e5-4db1-bafb-265ca4f7e85e",
       "b04090a2-6ba3-4b02-8571-c9f8d9d6cd0c",
-      "a7f08738-553b-41fd-85a6-49601899911d",
-      "adbe7f96-80fb-401f-bf31-a0411ceb12c8",
-      "c9ad842c-dad0-4c64-b5e6-19f8a36fe9b0",
-      "6fcae363-b5fb-4fdd-8c2d-eff45bb69198",
-      "812ea479-1d9d-4b91-b27c-394f49831b5e",
       "6d067d23-9ffc-44f6-812d-0987596827d1",
-      "d5882e55-abd9-4148-a536-c0287b521cd6",
-      "b1b0203e-a974-4cc1-aee5-102d35d09f67",
       "65d51711-e06b-448a-b105-3ee41369dce2",
+      "6952a8f7-56f9-44a7-a23b-9e1192dfb08b",
+      "c9ad842c-dad0-4c64-b5e6-19f8a36fe9b0",
+      "d5882e55-abd9-4148-a536-c0287b521cd6",
+      "76e63094-d2e5-4db1-bafb-265ca4f7e85e",
+      "a7f08738-553b-41fd-85a6-49601899911d",
+      "2583d041-c479-46b0-b1c3-e12f5e21e57d",
+      "6fcae363-b5fb-4fdd-8c2d-eff45bb69198",
+      "b1b0203e-a974-4cc1-aee5-102d35d09f67",
+      "a6661004-baca-4ddd-99be-1065353d2543",
+      "9e8f53c6-1ed7-40ed-92cf-3c23682f963c",
+      "adbe7f96-80fb-401f-bf31-a0411ceb12c8",
+      "812ea479-1d9d-4b91-b27c-394f49831b5e",
       "243551b6-9359-4185-9aa8-6f8a42d4c63e"
     ],
     "justin": [
-      "4f0a7fda-68de-4b47-bbd0-14daa3ab65ed",
       "77ce6f94-e12b-48f0-b61c-2ff783a123ae",
+      "80665341-85f1-4053-a47a-7a2c678ea196",
+      "a5dc4f92-d675-4a85-bb82-5bf7a806ac12",
       "e6f87fdf-64e1-417c-a61c-5327480517fb",
       "93ab9022-07d7-46d9-b9f5-acc352dff8f0",
-      "80665341-85f1-4053-a47a-7a2c678ea196",
-      "4cf82896-f630-4307-b3d9-22ac90364435",
-      "05dce116-ff14-4c4c-ad79-8b225e750f6c",
-      "bf70f21e-0036-490e-8dcb-64e2d0c36b51",
-      "820230d9-ea33-4e37-891b-0121f9cf0cf0",
-      "91230273-7f6d-4178-be00-2c6dce01e401",
-      "eaa8834d-0544-4548-9f23-954a4d2a865f",
-      "8eff5ce7-3e1d-47ea-89f2-fcb1b1432788",
-      "a5dc4f92-d675-4a85-bb82-5bf7a806ac12",
-      "dea2d46b-ea78-42d6-87fe-b1055860c891",
       "b388829d-84a7-42cf-979e-3b8b15ee1570",
-      "f23e2c4a-3459-4911-a8ab-93f5d25e5304"
+      "8eff5ce7-3e1d-47ea-89f2-fcb1b1432788",
+      "4cf82896-f630-4307-b3d9-22ac90364435",
+      "f23e2c4a-3459-4911-a8ab-93f5d25e5304",
+      "4f0a7fda-68de-4b47-bbd0-14daa3ab65ed",
+      "820230d9-ea33-4e37-891b-0121f9cf0cf0",
+      "dea2d46b-ea78-42d6-87fe-b1055860c891",
+      "bf70f21e-0036-490e-8dcb-64e2d0c36b51",
+      "91230273-7f6d-4178-be00-2c6dce01e401",
+      "05dce116-ff14-4c4c-ad79-8b225e750f6c",
+      "eaa8834d-0544-4548-9f23-954a4d2a865f"
     ]
   },
   "finalAssignment": {
     "roshan": [
-      "2583d041-c479-46b0-b1c3-e12f5e21e57d",
-      "6952a8f7-56f9-44a7-a23b-9e1192dfb08b",
-      "a7f08738-553b-41fd-85a6-49601899911d",
       "4cf82896-f630-4307-b3d9-22ac90364435",
+      "c9ad842c-dad0-4c64-b5e6-19f8a36fe9b0",
+      "d5882e55-abd9-4148-a536-c0287b521cd6",
+      "a7f08738-553b-41fd-85a6-49601899911d",
+      "6fcae363-b5fb-4fdd-8c2d-eff45bb69198",
+      "b1b0203e-a974-4cc1-aee5-102d35d09f67",
+      "a6661004-baca-4ddd-99be-1065353d2543",
+      "91230273-7f6d-4178-be00-2c6dce01e401",
       "812ea479-1d9d-4b91-b27c-394f49831b5e",
+      "b04090a2-6ba3-4b02-8571-c9f8d9d6cd0c",
+      "80665341-85f1-4053-a47a-7a2c678ea196",
       "6d067d23-9ffc-44f6-812d-0987596827d1",
       "b388829d-84a7-42cf-979e-3b8b15ee1570",
-      "d5882e55-abd9-4148-a536-c0287b521cd6",
-      "6fcae363-b5fb-4fdd-8c2d-eff45bb69198",
       "65d51711-e06b-448a-b105-3ee41369dce2",
-      "a6661004-baca-4ddd-99be-1065353d2543",
-      "b04090a2-6ba3-4b02-8571-c9f8d9d6cd0c",
-      "bf70f21e-0036-490e-8dcb-64e2d0c36b51",
-      "91230273-7f6d-4178-be00-2c6dce01e401",
-      "c9ad842c-dad0-4c64-b5e6-19f8a36fe9b0",
-      "b1b0203e-a974-4cc1-aee5-102d35d09f67"
+      "2583d041-c479-46b0-b1c3-e12f5e21e57d",
+      "bf70f21e-0036-490e-8dcb-64e2d0c36b51"
     ],
     "justin": [
-      "4f0a7fda-68de-4b47-bbd0-14daa3ab65ed",
-      "e6f87fdf-64e1-417c-a61c-5327480517fb",
-      "9e8f53c6-1ed7-40ed-92cf-3c23682f963c",
-      "05dce116-ff14-4c4c-ad79-8b225e750f6c",
-      "eaa8834d-0544-4548-9f23-954a4d2a865f",
-      "8eff5ce7-3e1d-47ea-89f2-fcb1b1432788",
       "77ce6f94-e12b-48f0-b61c-2ff783a123ae",
-      "93ab9022-07d7-46d9-b9f5-acc352dff8f0",
-      "80665341-85f1-4053-a47a-7a2c678ea196",
+      "a5dc4f92-d675-4a85-bb82-5bf7a806ac12",
+      "e6f87fdf-64e1-417c-a61c-5327480517fb",
+      "8eff5ce7-3e1d-47ea-89f2-fcb1b1432788",
+      "6952a8f7-56f9-44a7-a23b-9e1192dfb08b",
+      "4f0a7fda-68de-4b47-bbd0-14daa3ab65ed",
       "76e63094-d2e5-4db1-bafb-265ca4f7e85e",
       "820230d9-ea33-4e37-891b-0121f9cf0cf0",
-      "adbe7f96-80fb-401f-bf31-a0411ceb12c8",
-      "a5dc4f92-d675-4a85-bb82-5bf7a806ac12",
       "dea2d46b-ea78-42d6-87fe-b1055860c891",
+      "05dce116-ff14-4c4c-ad79-8b225e750f6c",
+      "93ab9022-07d7-46d9-b9f5-acc352dff8f0",
       "f23e2c4a-3459-4911-a8ab-93f5d25e5304",
+      "9e8f53c6-1ed7-40ed-92cf-3c23682f963c",
+      "adbe7f96-80fb-401f-bf31-a0411ceb12c8",
+      "eaa8834d-0544-4548-9f23-954a4d2a865f",
       "243551b6-9359-4185-9aa8-6f8a42d4c63e"
     ]
   },
@@ -1602,6 +1618,24 @@ const DATA = {
         "recvEnd": "4:00 PM",
         "delta": 0.0222,
         "swapWith": "justin"
+      },
+      {
+        "giveUid": "6952a8f7-56f9-44a7-a23b-9e1192dfb08b",
+        "giveSummary": "BWH Jr.  - FF Jr 7a-4p",
+        "giveDate": "2026-06-28",
+        "giveLoc": "BWH",
+        "giveType": "Morning",
+        "giveStart": "7:00 AM",
+        "giveEnd": "4:00 PM",
+        "recvUid": "80665341-85f1-4053-a47a-7a2c678ea196",
+        "recvSummary": "MGH Jr. - Jeopardy 1",
+        "recvDate": "2026-06-28",
+        "recvLoc": null,
+        "recvType": null,
+        "recvStart": "7:00 AM",
+        "recvEnd": "6:59 AM",
+        "delta": 0.0048,
+        "swapWith": "justin"
       }
     ],
     "justin": [
@@ -1620,7 +1654,7 @@ const DATA = {
         "recvType": "Swing",
         "recvStart": "12:00 PM",
         "recvEnd": "12:00 AM",
-        "delta": 0.0444,
+        "delta": 0.0,
         "swapWith": "roshan"
       },
       {
@@ -1638,7 +1672,7 @@ const DATA = {
         "recvType": "Swing",
         "recvStart": "11:00 AM",
         "recvEnd": "8:00 PM",
-        "delta": 0.0222,
+        "delta": 0.0,
         "swapWith": "roshan"
       },
       {
@@ -1656,7 +1690,7 @@ const DATA = {
         "recvType": "Swing",
         "recvStart": "3:00 PM",
         "recvEnd": "12:00 AM",
-        "delta": 0.0222,
+        "delta": 0.0,
         "swapWith": "roshan"
       },
       {
@@ -1674,7 +1708,25 @@ const DATA = {
         "recvType": "Swing",
         "recvStart": "12:00 PM",
         "recvEnd": "12:00 AM",
-        "delta": 0.0222,
+        "delta": 0.0,
+        "swapWith": "roshan"
+      },
+      {
+        "giveUid": "80665341-85f1-4053-a47a-7a2c678ea196",
+        "giveSummary": "MGH Jr. - Jeopardy 1",
+        "giveDate": "2026-06-28",
+        "giveLoc": null,
+        "giveType": null,
+        "giveStart": "7:00 AM",
+        "giveEnd": "6:59 AM",
+        "recvUid": "6952a8f7-56f9-44a7-a23b-9e1192dfb08b",
+        "recvSummary": "BWH Jr.  - FF Jr 7a-4p",
+        "recvDate": "2026-06-28",
+        "recvLoc": "BWH",
+        "recvType": "Morning",
+        "recvStart": "7:00 AM",
+        "recvEnd": "4:00 PM",
+        "delta": 0.0,
         "swapWith": "roshan"
       }
     ]
@@ -1945,18 +1997,35 @@ function renderWeek() {
     + ', ' + my;
   document.getElementById('week-label').textContent = weekLbl;
 
-  // Render time labels column first
-  let weekHtml = '<div class="week-col" style="flex: 0 0 50px; min-width: 50px; gap: 0;">'
-    + '<div class="week-col-hdr" style="visibility: hidden; height: 52px; padding: 0;"></div>'
-    + '<div class="time-labels-col">'
+  // Check if there are any all-day shifts in the current week
+  let weekHasAllday = false;
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(monday, i);
+    const iso = dateToIso(day);
+    const entries = dm[iso] || [];
+    if (entries.some(e => e.part === 'all-day')) {
+      weekHasAllday = true;
+      break;
+    }
+  }
+
+  let gridHtml = '';
+
+  // 1. Time labels column elements
+  gridHtml += '<div class="week-col-hdr-spacer" style="grid-column: 1; grid-row: 1; visibility: hidden; height: 52px; padding: 0; margin-bottom: 8px;"></div>';
+  if (weekHasAllday) {
+    gridHtml += '<div class="time-labels-allday-spacer" style="grid-column: 1; grid-row: 2; height: 0;"></div>';
+  }
+  const timeLabelsRow = weekHasAllday ? 3 : 2;
+  gridHtml += '<div class="time-labels-col" style="grid-column: 1; grid-row: ' + timeLabelsRow + ';">'
     + '<div class="time-label" style="top: 0px;">12 AM</div>'
     + '<div class="time-label" style="top: 105px;">7 AM</div>'
     + '<div class="time-label" style="top: 180px;">12 PM</div>'
     + '<div class="time-label" style="top: 255px;">5 PM</div>'
     + '<div class="time-label" style="top: 345px;">11 PM</div>'
-    + '</div>'
     + '</div>';
 
+  // 2. Day columns elements
   for (let i = 0; i < 7; i++) {
     const day = addDays(monday, i);
     const iso = dateToIso(day);
@@ -1965,33 +2034,41 @@ function renderWeek() {
     const dateNum = day.getDate();
 
     const entries = dm[iso] || [];
-    
-    // Split into all-day (jeopardy) and timed
     const alldayEntries = entries.filter(e => e.part === 'all-day');
     const hourlyEntries = entries.filter(e => e.part !== 'all-day');
 
-    let alldayHtml = '';
-    if (alldayEntries.length > 0) {
-      alldayHtml = '<div class="allday-container">'
-        + alldayEntries.map(({ s, st }) => {
-          let cls = '';
-          let badge = '';
-          if (st === 'give') {
-            cls = ' sb-give';
-            badge = '<span class="sb-badge badge-give"><span class="material-symbols-outlined" style="font-size:10px">arrow_upward</span>Give</span>';
-          } else if (st === 'recv') {
-            cls = ' sb-recv';
-            badge = '<span class="sb-badge badge-recv"><span class="material-symbols-outlined" style="font-size:10px">arrow_downward</span>Recv</span>';
-          }
-          return '<div class="allday-card' + cls + '" title="' + s.summary + '">'
-            + '<div class="sb-title">' + s.summary + '</div>'
-            + badge
-            + '</div>';
-        }).join('')
+    const colIdx = i + 2;
+
+    // Header
+    gridHtml += '<div class="week-col-hdr' + (isToday ? ' today' : '') + '" style="grid-column: ' + colIdx + '; grid-row: 1;">'
+      + '<div class="wch-dow">' + dow + '</div>'
+      + '<div class="wch-date">' + dateNum + '</div>'
+      + '</div>';
+
+    if (weekHasAllday) {
+      // All-day container
+      let alldayCardsHtml = alldayEntries.map(({ s, st }) => {
+        let cls = '';
+        let badge = '';
+        if (st === 'give') {
+          cls = ' sb-give';
+          badge = '<span class="sb-badge badge-give"><span class="material-symbols-outlined" style="font-size:10px">arrow_upward</span>Give</span>';
+        } else if (st === 'recv') {
+          cls = ' sb-recv';
+          badge = '<span class="sb-badge badge-recv"><span class="material-symbols-outlined" style="font-size:10px">arrow_downward</span>Recv</span>';
+        }
+        return '<div class="allday-card' + cls + '" title="' + s.summary + '">'
+          + '<div class="sb-title">' + s.summary + '</div>'
+          + badge
+          + '</div>';
+      }).join('');
+
+      gridHtml += '<div class="allday-container' + (isToday ? ' today-allday' : '') + '" style="grid-column: ' + colIdx + '; grid-row: 2;">'
+        + alldayCardsHtml
         + '</div>';
     }
 
-    let hourlyHtml = '';
+    // Hourly container
     let cards = '';
     hourlyEntries.forEach(({ s, st, part }) => {
       let cls = st === 'give' ? 'sb-give' : st === 'recv' ? 'sb-recv' : s.loc === 'MGH' ? 'sb-mgh' : 'sb-bwh';
@@ -2005,12 +2082,10 @@ function renderWeek() {
       }
 
       if (part === 1) {
-        // Part 1: bottom slice (15px height from 11 PM to 12 AM)
         cards += '<div class="shift-card absolute-card part-1 ' + cls + '" style="top: ' + (s.startHour * 15) + 'px; height: 15px;" title="' + s.summary + '">'
           + '<div style="font-size:0.6rem; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">' + s.summary + ' (P1)</div>'
           + '</div>';
       } else if (part === 2) {
-        // Part 2: top chunk (from 12 AM to endHour)
         const height = s.endHour * 15;
         cards += '<div class="shift-card absolute-card ' + cls + '" style="top: 0px; height: ' + height + 'px;" title="' + s.summary + '">'
           + '<div class="sb-title">' + s.summary + ' (P2)</div>'
@@ -2019,7 +2094,6 @@ function renderWeek() {
           + badge
           + '</div>';
       } else {
-        // Normal timed shift
         const top = s.startHour * 15;
         const height = (s.endHour - s.startHour) * 15;
         cards += '<div class="shift-card absolute-card ' + cls + '" style="top: ' + top + 'px; height: ' + height + 'px;" title="' + s.summary + '">'
@@ -2031,22 +2105,14 @@ function renderWeek() {
       }
     });
 
-    hourlyHtml = '<div class="hourly-container">' + cards + '</div>';
-
-    weekHtml += '<div class="week-col">'
-      + '<div class="week-col-hdr' + (isToday ? ' today' : '') + '">'
-      + '<div class="wch-dow">' + dow + '</div>'
-      + '<div class="wch-date">' + dateNum + '</div>'
-      + '</div>'
-      + '<div class="week-col-body' + (isToday ? ' today-col' : '') + '">' 
-      + alldayHtml
-      + hourlyHtml
-      + '</div>'
+    const hourlyRow = weekHasAllday ? 3 : 2;
+    gridHtml += '<div class="hourly-container' + (isToday ? ' today-hourly' : '') + (weekHasAllday ? ' split-bottom' : '') + '" style="grid-column: ' + colIdx + '; grid-row: ' + hourlyRow + ';">'
+      + cards
       + '</div>';
   }
 
   document.getElementById('week-view').innerHTML =
-    '<div class="week-grid">' + weekHtml + '</div>';
+    '<div class="week-grid' + (weekHasAllday ? ' has-allday' : '') + '">' + gridHtml + '</div>';
 }
 
 /* ── Swap Cards ── */
