@@ -36,3 +36,6 @@ ALLOW_MULTI_SWAPS = False
 
 # Timezone: all .ics events use TZID=EDT with a fixed -0400 offset.
 LOCAL_TZ = "America/New_York"
+
+# Ignore user weights in CSV preference (True = ignore weights and normalize them to 1.0)
+IGNORE_WEIGHT = True

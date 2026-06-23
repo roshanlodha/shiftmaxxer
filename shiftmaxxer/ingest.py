@@ -6,7 +6,8 @@ import pandas as pd
 import re
 
 from .config import (LOC_PREFIX_LEN, VALID_LOCATIONS, JEOPARDY_KEYWORDS,
-                     MORNING_START, SWING_START, OVERNIGHT_START, LOCAL_TZ, NO_PREF)
+                     MORNING_START, SWING_START, OVERNIGHT_START, LOCAL_TZ, NO_PREF,
+                     IGNORE_WEIGHT)
 from .models import Shift, Resident, Schedule
 
 LOCAL = tz.gettz(LOCAL_TZ)
@@ -92,6 +93,11 @@ def load_preferences(csv_path) -> dict[str, Resident]:
         w_loc = 0.0 if loc_pref == NO_PREF else float(row["location_weight"])
         w_typ = 0.0 if type_pref == NO_PREF else float(row["time_weight"])
         w_str = float(row["days_weight"])
+
+        if IGNORE_WEIGHT:
+            w_loc = 1.0 if w_loc > 0 else 0.0
+            w_typ = 1.0 if w_typ > 0 else 0.0
+            w_str = 1.0 if w_str > 0 else 0.0
 
         total = w_loc + w_typ + w_str
         if total > 0:
