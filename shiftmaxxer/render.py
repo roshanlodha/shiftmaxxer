@@ -1120,6 +1120,83 @@ body {
   color: var(--md-sys-color-on-surface-variant);
   max-width: 340px;
 }
+
+/* Standardize Material Symbols for symmetric, uniform design */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .hdr {
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    padding: 16px;
+    gap: 12px;
+  }
+  .hdr > div {
+    justify-content: space-between;
+  }
+  .md3-select-wrapper {
+    width: 100%;
+  }
+  .md3-select {
+    width: 100%;
+    flex-grow: 1;
+  }
+  .main {
+    padding: 16px 12px 32px;
+    gap: 24px;
+  }
+  .sec-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .sec-header > div {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 12px;
+  }
+  .md3-segmented-button-container {
+    width: 100%;
+  }
+  .md3-segmented-button {
+    flex: 1;
+    text-align: center;
+  }
+  .week-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .week-label {
+    flex-grow: 1;
+    min-width: 0;
+  }
+  .swaps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo {
+    font-size: 1rem;
+  }
+  .logo-sub {
+    font-size: 0.7rem;
+  }
+  .logo-mark {
+    width: 32px;
+    height: 32px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1147,7 +1224,11 @@ body {
     <section>
       <div class="sec-header">
         <h2 class="section-title">Schedule View</h2>
-        <div style="display: flex; align-items: center; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="md3-segmented-button-container">
+            <button class="md3-segmented-button" id="toggle-original">Original</button>
+            <button class="md3-segmented-button selected" id="toggle-optimal">Optimal</button>
+          </div>
           <div class="week-nav">
             <button class="md3-btn-icon-outlined" id="prev-week" title="Previous week">
               <span class="material-symbols-outlined" style="font-size: 20px;">chevron_left</span>
@@ -1182,16 +1263,6 @@ body {
       </div>
       
       <div class="prefs-card" id="prefs"></div>
-
-      <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
-        <h2 class="section-title" style="margin: 0;">View</h2>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div class="md3-segmented-button-container">
-            <button class="md3-segmented-button" id="toggle-original">Original</button>
-            <button class="md3-segmented-button selected" id="toggle-optimal">Optimal</button>
-          </div>
-        </div>
-      </div>
     </aside>
   </div>
 
@@ -1204,7 +1275,7 @@ body {
       <div class="swaps-row">
         <h3 class="swaps-row-title" style="margin-bottom: 12px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
           <span class="material-symbols-outlined" style="color: var(--md-sys-color-tertiary); font-size: 20px;">volunteer_activism</span>
-          Swaps for You <span style="font-weight: normal; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant)">(Your happiness gain is higher; you should propose these)</span>
+          Swaps for You <span style="font-weight: normal; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant)">(you should propose these)</span>
           <span class="count-badge" id="swaps-for-you-count">0</span>
         </h3>
         <div id="swaps-for-you-grid" class="swaps-grid"></div>
@@ -1213,7 +1284,7 @@ body {
       <div class="swaps-row">
         <h3 class="swaps-row-title" style="margin-bottom: 12px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
           <span class="material-symbols-outlined" style="color: var(--md-sys-color-primary); font-size: 20px;">swap_horizontal_circle</span>
-          Swaps with You <span style="font-weight: normal; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant)">(Another resident benefits more; they may propose these to you)</span>
+          Swaps with You <span style="font-weight: normal; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant)">(others may propose these to you)</span>
           <span class="count-badge" id="swaps-with-you-count">0</span>
         </h3>
         <div id="swaps-with-you-grid" class="swaps-grid"></div>

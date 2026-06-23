@@ -44,7 +44,7 @@ ALLOW_MULTI_SWAPS = False
 LOCAL_TZ = "America/New_York"
 
 # Ignore user weights in CSV preference (True = ignore weights and normalize them to 1.0)
-IGNORE_WEIGHT = True
+IGNORE_WEIGHT = False
 
 # --- Start Date Filter ---
 # Empty string corresponds to allowing all dates, otherwise should be a datetime object.

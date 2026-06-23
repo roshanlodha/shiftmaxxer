@@ -59,7 +59,10 @@ To set up the environment and run the optimizer:
    python main.py -K 2 -n 2 --html customized_report.html
    ```
 
-   Key arguments:
-   - `-K`, `--max-swaps-per-person`: The maximum number of swaps any single resident can participate in (default: 3).
-   - `-n`, `--max-cycle`: The maximum cycle length to search for (2 for 1-for-1 swaps, 3 to include three-way rotations).
-   - `--allow-jeopardy-swaps`: Allow jeopardy or backup shifts to participate in trading.
+    Key arguments:
+    - `-K`, `--max-swaps-per-person`: The maximum number of swaps any single resident can be charged with as the primary beneficiary (default: 3). Swaps where the resident is a passive participant (their partner benefits more) do not count towards their budget. Use -1 for unlimited.
+    - `-n`, `--max-cycle`: The maximum cycle length to search for (2 for 1-for-1 swaps, 3 to include three-way rotations).
+    - `--allow-jeopardy-swaps`: Allow jeopardy or backup shifts to participate in trading.
+
+    Additional settings:
+    - `START_DATE` (in `shiftmaxxer/config.py`): Scheduled shifts occurring before this date (e.g., June 29, 2026) are ignored and excluded from trading.
