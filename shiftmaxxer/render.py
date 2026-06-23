@@ -1339,6 +1339,7 @@ svg.lucide {
           <div class="md3-segmented-button-container">
             <button class="md3-segmented-button" id="toggle-original">Original</button>
             <button class="md3-segmented-button selected" id="toggle-optimal">Optimal</button>
+            <button class="md3-segmented-button" id="toggle-all">All</button>
           </div>
           <div class="week-nav">
             <button class="md3-btn-icon-outlined" id="prev-week" title="Previous week">
@@ -1395,7 +1396,7 @@ svg.lucide {
       <div class="swaps-row">
         <h3 class="swaps-row-title" style="margin-bottom: 12px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
           <i data-lucide="arrow-left-right" style="color: var(--md-sys-color-primary); width: 20px; height: 20px;"></i>
-          Swaps with You <span style="font-weight: normal; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant)">(others may propose these to you)</span>
+          Swaps with You <span style="font-weight: normal; font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant)">(others may propose these)</span>
           <span class="count-badge" id="swaps-with-you-count">0</span>
         </h3>
         <div id="swaps-with-you-grid" class="swaps-grid"></div>
@@ -1474,18 +1475,20 @@ function init() {
 
   const optBtn = document.getElementById('toggle-optimal');
   const origBtn = document.getElementById('toggle-original');
-  optBtn.addEventListener('click', () => {
-    viewMode = 'optimal';
-    optBtn.classList.add('selected');
-    origBtn.classList.remove('selected');
+  const allBtn = document.getElementById('toggle-all');
+  
+  const setViewMode = (mode) => {
+    viewMode = mode;
+    [origBtn, optBtn, allBtn].forEach(btn => btn.classList.remove('selected'));
+    if (mode === 'original') origBtn.classList.add('selected');
+    else if (mode === 'optimal') optBtn.classList.add('selected');
+    else if (mode === 'all') allBtn.classList.add('selected');
     renderWeek();
-  });
-  origBtn.addEventListener('click', () => {
-    viewMode = 'original';
-    origBtn.classList.add('selected');
-    optBtn.classList.remove('selected');
-    renderWeek();
-  });
+  };
+
+  origBtn.addEventListener('click', () => setViewMode('original'));
+  optBtn.addEventListener('click', () => setViewMode('optimal'));
+  allBtn.addEventListener('click', () => setViewMode('all'));
 
   render();
 }
@@ -1501,6 +1504,66 @@ function updateLucide() {
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
+}
+
+function layoutHourlyEntries(entries) {
+  const items = entries.map(e => {
+    let start = 0, end = 0;
+    if (e.part === 1) {
+      start = e.s.startHour;
+      end = e.s.startHour + 1.0;
+    } else if (e.part === 2) {
+      start = 0.0;
+      end = e.s.endHour;
+    } else {
+      start = e.s.startHour;
+      end = e.s.endHour;
+    }
+    return { ...e, start, end };
+  });
+
+  items.sort((a, b) => a.start - b.start || b.end - a.end);
+
+  const clusters = [];
+  let currentCluster = null;
+
+  items.forEach(item => {
+    if (!currentCluster || item.start >= currentCluster.maxEnd) {
+      currentCluster = {
+        items: [item],
+        maxEnd: item.end
+      };
+      clusters.push(currentCluster);
+    } else {
+      currentCluster.items.push(item);
+      currentCluster.maxEnd = Math.max(currentCluster.maxEnd, item.end);
+    }
+  });
+
+  clusters.forEach(cluster => {
+    const columns = [];
+    cluster.items.forEach(item => {
+      let colIdx = -1;
+      for (let c = 0; c < columns.length; c++) {
+        if (columns[c] <= item.start) {
+          colIdx = c;
+          break;
+        }
+      }
+      if (colIdx === -1) {
+        colIdx = columns.length;
+        columns.push(item.end);
+      } else {
+        columns[colIdx] = item.end;
+      }
+      item.colIdx = colIdx;
+    });
+    cluster.items.forEach(item => {
+      item.numCols = columns.length;
+    });
+  });
+
+  return items;
 }
 
 /* ── Happiness Card ── */
@@ -1545,7 +1608,7 @@ function renderHappiness() {
 function renderPrefs() {
   const r = DATA.residents[cur];
   
-  const bar = (origVal, optVal) => {
+  const bar = (origVal, optVal, hideLabel = false) => {
     const origPct = Math.min(100, Math.max(0, origVal));
     const optPct = Math.min(100, Math.max(0, optVal));
     const gainPct = Math.max(0, optPct - origPct);
@@ -1555,7 +1618,7 @@ function renderPrefs() {
       + '<div class="wfill-orig" style="width:' + origPct + '%"></div>'
       + '<div class="wfill-gain" style="width:' + gainPct + '%"></div>'
       + '</div>'
-      + '<div class="wlbl">' + origPct + '% &rarr; ' + optPct + '%</div>'
+      + (hideLabel ? '' : '<div class="wlbl">' + origPct + '% &rarr; ' + optPct + '%</div>')
       + '</div>';
   };
 
@@ -1574,10 +1637,12 @@ function renderPrefs() {
   };
 
   const streakRow = (icon, label, orig, opt, target) => {
+    const improved = Math.abs(opt - target) < Math.abs(orig - target);
+    const colorStyle = improved ? ' style="color: var(--md-sys-color-tertiary); font-weight: 700;"' : '';
     return '<div class="pref-row">'
       + '<div class="pref-lbl-row">'
       + '<span class="pref-lbl"><i data-lucide="' + icon + '" style="width:16px; height:16px;"></i>' + label + '</span>'
-      + '<span class="pref-val">' + orig.toFixed(1) + ' &rarr; ' + opt.toFixed(1) + ' days</span>'
+      + '<span class="pref-val"' + colorStyle + '>' + orig.toFixed(1) + ' &rarr; ' + opt.toFixed(1) + ' days</span>'
       + '</div>'
       + '<div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); margin-top:2px;">Target Work Streak: ' + target + ' days</div>'
       + '</div>';
@@ -1589,7 +1654,7 @@ function renderPrefs() {
       + '<span class="pref-lbl" style="color:var(--md-sys-color-tertiary)"><i data-lucide="party-popper" style="width:16px; height:16px;"></i>Total Happiness</span>'
       + '<span class="pref-val" style="color:var(--md-sys-color-tertiary)">' + origVal + '% &rarr; ' + optVal + '%</span>'
       + '</div>'
-      + bar(origVal, optVal)
+      + bar(origVal, optVal, true)
       + '</div>';
   };
   
@@ -1611,7 +1676,7 @@ function renderWeek() {
   const gives = new Set((DATA.swaps[cur] || []).map(s => s.giveUid));
   const recvs = new Set((DATA.swaps[cur] || []).map(s => s.recvUid));
   
-  const visibleUids = viewMode === 'optimal' ? final : orig;
+  const visibleUids = viewMode === 'optimal' ? final : (viewMode === 'original' ? orig : new Set([...orig, ...final]));
 
   const dm = {};
   visibleUids.forEach(uid => {
@@ -1734,7 +1799,8 @@ function renderWeek() {
 
     // Hourly container
     let cards = '';
-    hourlyEntries.forEach(({ s, st, part }) => {
+    const positionedEntries = layoutHourlyEntries(hourlyEntries);
+    positionedEntries.forEach(({ s, st, part, colIdx, numCols }) => {
       let cls = st === 'give' ? 'sb-give' : st === 'recv' ? 'sb-recv' : s.loc === 'MGH' ? 'sb-mgh' : 'sb-bwh';
       const locLabel = s.loc || 'Unknown';
       
@@ -1745,13 +1811,17 @@ function renderWeek() {
         badge = '<span class="sb-badge badge-recv"><i data-lucide="arrow-down" style="width:10px; height:10px; stroke-width:3;"></i>Recv</span>';
       }
 
+      // Calculate width and left percentages
+      const widthPct = 98 / numCols;
+      const leftPct = colIdx * (100 / numCols) + 1;
+
       if (part === 1) {
-        cards += '<div class="shift-card absolute-card part-1 ' + cls + '" style="top: ' + (s.startHour * 15) + 'px; height: 15px;" title="' + s.summary + '">'
+        cards += '<div class="shift-card absolute-card part-1 ' + cls + '" style="top: ' + (s.startHour * 15) + 'px; height: 15px; left: ' + leftPct + '%; width: ' + widthPct + '%; right: auto;" title="' + s.summary + '">'
           + '<div style="font-size:0.6rem; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">' + s.summary + ' (P1)</div>'
           + '</div>';
       } else if (part === 2) {
         const height = s.endHour * 15;
-        cards += '<div class="shift-card absolute-card ' + cls + '" style="top: 0px; height: ' + height + 'px;" title="' + s.summary + '">'
+        cards += '<div class="shift-card absolute-card ' + cls + '" style="top: 0px; height: ' + height + 'px; left: ' + leftPct + '%; width: ' + widthPct + '%; right: auto;" title="' + s.summary + '">'
           + '<div class="sb-title">' + s.summary + ' (P2)</div>'
           + '<div class="sb-loc"><i data-lucide="building" style="width:12px; height:12px;"></i>' + locLabel + (s.type ? ' · ' + s.type : '') + '</div>'
           + '<div class="sb-time"><i data-lucide="clock" style="width:12px; height:12px;"></i>' + s.startFmt + ' - ' + s.endFmt + '</div>'
@@ -1760,7 +1830,7 @@ function renderWeek() {
       } else {
         const top = s.startHour * 15;
         const height = (s.endHour - s.startHour) * 15;
-        cards += '<div class="shift-card absolute-card ' + cls + '" style="top: ' + top + 'px; height: ' + height + 'px;" title="' + s.summary + '">'
+        cards += '<div class="shift-card absolute-card ' + cls + '" style="top: ' + top + 'px; height: ' + height + 'px; left: ' + leftPct + '%; width: ' + widthPct + '%; right: auto;" title="' + s.summary + '">'
           + '<div class="sb-title">' + s.summary + '</div>'
           + '<div class="sb-loc"><i data-lucide="building" style="width:12px; height:12px;"></i>' + locLabel + (s.type ? ' · ' + s.type : '') + '</div>'
           + '<div class="sb-time"><i data-lucide="clock" style="width:12px; height:12px;"></i>' + s.startFmt + ' - ' + s.endFmt + '</div>'
