@@ -23,7 +23,7 @@ class Resident:
     name: str
     loc_pref: str             # "MGH" | "BWH" | "ANY"
     loc_weight: float
-    type_pref: str            # "Morning" | "Swing" | "Overnight" | "ANY"
+    type_pref: str            # "Morning" | "Swing" | "ANY"  (no Overnight pref)
     type_weight: float
     days_pref: int            # ideal consecutive days, 3..6
     days_weight: float

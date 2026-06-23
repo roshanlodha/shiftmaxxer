@@ -29,8 +29,10 @@ JEOPARDY_KEYWORDS = ("jeopardy", "backup")
 NO_PREF = "ANY"
 
 # --- Optimizer defaults (overridable via CLI) ---
-DEFAULT_MAX_TOTAL_SWAPS = 20        # K: total shifts allowed to change hands
-DEFAULT_MAX_CYCLE_LENGTH = 2        # n_max: 2 = 1:1 trades, 3 = 3-way. CAP AT 3.
+DEFAULT_MAX_TOTAL_SWAPS = 5        # K: total shifts allowed to change hands
+# ALLOW_MULTI_SWAPS: False = 1:1 trades only (cycle length 2);
+#                    True  = also allow 3-way trades (cycle length 3, the cap).
+ALLOW_MULTI_SWAPS = False
 
 # Timezone: all .ics events use TZID=EDT with a fixed -0400 offset.
 LOCAL_TZ = "America/New_York"

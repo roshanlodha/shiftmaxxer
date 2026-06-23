@@ -3,7 +3,7 @@ from pathlib import Path
 from shiftmaxxer.ingest import build_schedule
 from shiftmaxxer.optimizer import optimize
 from shiftmaxxer.report import format_log
-from shiftmaxxer.config import DEFAULT_MAX_TOTAL_SWAPS, DEFAULT_MAX_CYCLE_LENGTH
+from shiftmaxxer.config import DEFAULT_MAX_TOTAL_SWAPS, ALLOW_MULTI_SWAPS
 
 
 def main():
@@ -11,7 +11,8 @@ def main():
     ap.add_argument("--ics", default="data/ics")
     ap.add_argument("--prefs", default="data/preferences.csv")
     ap.add_argument("-K", "--max-swaps", type=int, default=DEFAULT_MAX_TOTAL_SWAPS)
-    ap.add_argument("-n", "--max-cycle", type=int, default=DEFAULT_MAX_CYCLE_LENGTH)
+    ap.add_argument("-n", "--max-cycle", type=int,
+                    default=3 if ALLOW_MULTI_SWAPS else 2)
     args = ap.parse_args()
     assert args.max_cycle <= 3, "max cycle length capped at 3"
 

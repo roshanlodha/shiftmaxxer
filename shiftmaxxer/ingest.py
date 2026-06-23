@@ -84,7 +84,9 @@ def load_preferences(csv_path) -> dict[str, Resident]:
     residents = {}
     for _, row in df.iterrows():
         loc_pref = _norm_pref(row["location_pref"], {"MGH", "BWH"})
-        type_pref = _norm_pref(row["time_pref"], {"Morning", "Swing", "Overnight"})
+        # Overnight is not an allowed preference (no one wants overnights);
+        # anything other than Morning/Swing normalizes to ANY (no preference).
+        type_pref = _norm_pref(row["time_pref"], {"Morning", "Swing"})
 
         # Zero-out weights whose preference is ANY.
         w_loc = 0.0 if loc_pref == NO_PREF else float(row["location_weight"])

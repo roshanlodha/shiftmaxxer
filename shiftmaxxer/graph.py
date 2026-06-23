@@ -1,5 +1,5 @@
 import networkx as nx
-from .feasibility import is_valid
+from .feasibility import is_valid_swap
 from .utility import utility
 from .models import Schedule
 
@@ -22,7 +22,7 @@ def build_trade_graph(sched: Schedule) -> nx.DiGraph:
             if sv.work_date in ri.days_off:        # explicit day-off rejection
                 continue
             proposed = [s for s in base_shifts[i] if s.uid != u] + [sv]
-            if not is_valid(proposed, ri.days_off):
+            if not is_valid_swap(proposed, base_shifts[i], ri.days_off):
                 continue
             if utility(proposed, ri) >= base_util[i]:
                 G.add_edge(u, v)

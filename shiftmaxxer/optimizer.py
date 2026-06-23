@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from .graph import build_trade_graph, find_cycles
 from .utility import utility
-from .feasibility import is_valid
+from .feasibility import is_valid_swap
 from .models import Schedule
 
 
@@ -35,10 +35,11 @@ def evaluate_cycle(cycle: list[str], sched: Schedule) -> CycleResult | None:
     deltas = {}
     for name, uids in involved.items():
         r = sched.residents[name]
+        current = sched.shifts_of(name)
         proposed = [sched.shifts[x] for x in uids]
-        if not is_valid(proposed, r.days_off):
+        if not is_valid_swap(proposed, current, r.days_off):
             return None
-        before = utility(sched.shifts_of(name), r)
+        before = utility(current, r)
         after = utility(proposed, r)
         if after < before - 1e-9:                  # Pareto: nobody worse
             return None

@@ -40,3 +40,30 @@ def is_valid(shifts: list[Shift], days_off: frozenset[date]) -> bool:
         return False
 
     return True
+
+
+def _count_violations(shifts: list[Shift]) -> int:
+    """Count ACGME rest + streak violations. Day-off is handled separately as a
+    hard constraint, so it is intentionally excluded here."""
+    if not shifts:
+        return 0
+    ordered = sorted(shifts, key=lambda s: s.t_start)
+    rest = sum(1 for a, b in zip(ordered, ordered[1:]) if b.t_start - a.t_end < MIN_REST)
+    streak = sum(1 for L in _streaks({s.work_date for s in shifts})
+                 if L > MAX_CONSECUTIVE_DAYS)
+    return rest + streak
+
+
+def is_valid_swap(proposed: list[Shift], current: list[Shift],
+                  days_off: frozenset[date]) -> bool:
+    """A swap is acceptable if it does not WORSEN feasibility relative to the
+    resident's current schedule. Real-world rosters frequently carry pre-existing
+    rest violations (e.g. an 11a-8p shift followed by a next-day 7a shift = 11h
+    rest); those are grandfathered. Day-off remains an absolute hard constraint:
+    a proposed shift may never land on a declared day off."""
+    # Day-off: always hard, never allowed.
+    for s in proposed:
+        if s.work_date in days_off:
+            return False
+    # Rest + streak: only reject if the swap introduces NEW violations.
+    return _count_violations(proposed) <= _count_violations(current)
