@@ -92,6 +92,7 @@ def load_preferences(csv_path) -> dict[str, Resident]:
         "time_weight",
         "days_pref",
         "days_weight",
+        "calendar_ics",
     ]
     if len(df.columns) == len(expected_cols):
         df.columns = expected_cols

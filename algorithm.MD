@@ -173,12 +173,15 @@ tractability and transparency.
 
 Three hyperparameters give the scheduler direct control:
 
-- $K$ — the **swap budget**: the total number of shifts allowed to change hands.
+- $K_{\text{pp}}$ — the **per-person swap cap**: the maximum number of swaps any
+  single resident may participate in.  Set to $-1$ for unlimited.  Default is $3$.
+  This ensures **equity** — no resident is churned through many trades while
+  others sit still.
 - $n_{\max}$ — the **maximum cycle length**: $2$ for 1-for-1 trades only, $3$ to
   also allow three-way rotations.
-- `ALLOW_JEOPARDY_SWAPS` — when `True` (default), jeopardy shifts participate in
+- `ALLOW_JEOPARDY_SWAPS` — when `True`, jeopardy shifts participate in
   trading but are type-isolated (jeopardy trades only with jeopardy); when
-  `False`, jeopardy shifts are pinned and excluded from all trading.
+  `False` (default), jeopardy shifts are pinned and excluded from all trading.
 
 The mechanism iterates:
 
@@ -188,11 +191,13 @@ The mechanism iterates:
    search suffices.
 3. **Filter** to cycles that are *strictly Pareto-improving*: recompute each
    participant's post-trade utility and keep the cycle only if no participant is
-   worse off and at least one is strictly better. Score each surviving cycle by
-   its total happiness gain $\Delta U_{\text{total}}=\sum_{x}\Delta U_x$.
-4. **Apply greedily**: execute the highest-scoring cycle that fits within the
-   remaining budget, update the schedule, and return to step 1.
-5. **Terminate** when no budget-fitting, Pareto-improving cycle remains.
+   worse off and at least one is strictly better.  Additionally, reject any cycle
+   where a participant would exceed $K_{\text{pp}}$ swaps (unless $K_{\text{pp}}=-1$).
+   Score each surviving cycle by its total happiness gain
+   $\Delta U_{\text{total}}=\sum_{x}\Delta U_x$.
+4. **Apply greedily**: execute the highest-scoring cycle, increment each
+   participant's swap counter, update the schedule, and return to step 1.
+5. **Terminate** when no per-person-budget-fitting, Pareto-improving cycle remains.
 
 Rebuilding the graph after each executed trade is deliberate: it keeps every
 decision based on the true current state and sidesteps the bookkeeping of

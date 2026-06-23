@@ -28,13 +28,14 @@ JEOPARDY_KEYWORDS = ("jeopardy", "backup")
 # --- Jeopardy/backup shift swap behavior ---
 # True  = jeopardy shifts can be swapped, but ONLY with other jeopardy shifts.
 # False = jeopardy shifts are pinned and never participate in any trade.
-ALLOW_JEOPARDY_SWAPS = True
+ALLOW_JEOPARDY_SWAPS = False
 
 # --- Sentinel values for "no preference" ---
 NO_PREF = "ANY"
 
 # --- Optimizer defaults (overridable via CLI) ---
-DEFAULT_MAX_TOTAL_SWAPS = 20        # K: total shifts allowed to change hands
+DEFAULT_MAX_SWAPS_PER_PERSON = 3    # max swaps any single person can make;
+                                     # -1 = unlimited.  Ensures equity.
 # ALLOW_MULTI_SWAPS: False = 1:1 trades only (cycle length 2);
 #                    True  = also allow 3-way trades (cycle length 3, the cap).
 ALLOW_MULTI_SWAPS = False

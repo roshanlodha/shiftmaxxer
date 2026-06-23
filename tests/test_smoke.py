@@ -33,7 +33,7 @@ def test_load_preferences_normalization():
 def test_end_to_end_pipeline():
     sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
-    log = optimize(sched, K=10, n_max=2)
+    log = optimize(sched, max_swaps_per_person=-1, n_max=2)
     html = render_html(sched, log, original_assignment)
     assert html is not None
     assert "/*__INJECT_DATA__*/" not in html
@@ -43,7 +43,7 @@ def test_resident_metrics_payload():
     from shiftmaxxer.render import build_payload
     sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
-    log = optimize(sched, K=10, n_max=2)
+    log = optimize(sched, max_swaps_per_person=-1, n_max=2)
     payload = build_payload(sched, log, original_assignment)
     
     roshan = payload["residents"]["roshan"]

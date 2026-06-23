@@ -59,20 +59,39 @@ def apply_cycle(result: CycleResult, sched: Schedule):
             **{**sched.shifts[v].__dict__, "owner": giver})
 
 
-def optimize(sched: Schedule, K: int, n_max: int) -> list[CycleResult]:
-    executed, log = 0, []
-    while executed < K:
+def optimize(sched: Schedule, max_swaps_per_person: int, n_max: int) -> list[CycleResult]:
+    """Iteratively apply best Pareto-improving cycles.
+
+    Parameters
+    ----------
+    max_swaps_per_person : int
+        Maximum number of swaps any single resident may participate in.
+        -1 means unlimited.
+    """
+    from collections import Counter
+    swap_count: Counter = Counter()   # resident name -> swaps used
+    log: list[CycleResult] = []
+
+    while True:
         G = build_trade_graph(sched)
         candidates = []
         for cyc in find_cycles(G, n_max):
             res = evaluate_cycle(cyc, sched)
-            if res and (executed + len(res.cycle)) <= K:
-                candidates.append(res)
+            if res is None:
+                continue
+            # Per-person cap check (-1 = unlimited)
+            if max_swaps_per_person != -1:
+                involved_names = set(res.deltas.keys())
+                if any(swap_count[n] + 1 > max_swaps_per_person
+                       for n in involved_names):
+                    continue
+            candidates.append(res)
         if not candidates:
             break
         candidates.sort(key=lambda r: r.total_delta, reverse=True)
         best = candidates[0]
         apply_cycle(best, sched)
-        executed += len(best.cycle)
+        for name in best.deltas:
+            swap_count[name] += 1
         log.append(best)
     return log
