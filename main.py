@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path
 from shiftmaxxer.ingest import build_schedule
-from shiftmaxxer.optimizer import optimize
-from shiftmaxxer.report import format_log
+from shiftmaxxer.optimizer import optimize, optimize_live
+from shiftmaxxer.report import format_log, cli_confirm
 from shiftmaxxer.render import render_html
 from shiftmaxxer.config import DEFAULT_MAX_SWAPS_PER_PERSON, ALLOW_MULTI_SWAPS
 import shiftmaxxer.config as config
@@ -21,6 +21,8 @@ def main():
                     help="allow jeopardy/backup shifts to participate in trading")
     ap.add_argument("--html", default="shiftswap.html",
                     help="output path for HTML report (default: shiftswap.html)")
+    ap.add_argument("--live", action="store_true",
+                    help="interactive mode: confirm each swap before applying")
     args = ap.parse_args()
     assert args.max_cycle <= 3, "max cycle length capped at 3"
 
@@ -30,8 +32,12 @@ def main():
     sched = build_schedule(Path(args.ics), Path(args.prefs))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
 
-    log = optimize(sched, max_swaps_per_person=args.max_swaps_per_person,
-                   n_max=args.max_cycle)
+    if args.live:
+        log = optimize_live(sched, max_swaps_per_person=args.max_swaps_per_person,
+                            n_max=args.max_cycle, confirm=cli_confirm)
+    else:
+        log = optimize(sched, max_swaps_per_person=args.max_swaps_per_person,
+                       n_max=args.max_cycle)
 
     print(format_log(log, sched))
 

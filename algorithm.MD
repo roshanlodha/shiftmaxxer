@@ -230,6 +230,47 @@ All three extensions share the same integration pattern and therefore the same r
 
 ---
 
-## 9. Conclusion
+## 9. Live Mode: Human-in-the-Loop Execution
 
-We framed resident schedule improvement not as a re-optimization problem but as a *trade discovery* problem, and solved it with a bounded, Pareto-improving cycle mechanism on a directed trade graph. The result is a tool that respects the existing schedule, never harms anyone, never breaks the rules, and explains every recommendation it makes. Two parameters, the swap budget $K$ and the cycle length $n_{\max}$, let a program control how many swaps are executed.
+The single-snapshot batch optimizer (Section 5) selects and applies all trades automatically. In practice a chief resident may want to review each proposed swap individually — for reasons outside the model, such as interpersonal dynamics, upcoming vacation plans, or upcoming conference coverage — before it is committed. **Live mode** provides this capability.
+
+### 9.1 Algorithm
+
+Live mode restores the iterative execution strategy from an earlier version of the mechanism and augments it with a human confirmation gate:
+
+1. **Rebuild** the trade graph $G$ from the *current* schedule (reflecting all swaps accepted so far). Shifts involved in a previously accepted swap are locked and excluded from the graph.
+2. **Enumerate** all simple cycles of length $\le n_{\max}$, evaluate each against the current schedule (the same Pareto and feasibility checks as Section 5), and filter out any cycle whose exact swap signature appears in the **rejection blacklist** $\mathcal{R}$ (see Section 9.2). Apply the per-person participation cap.
+3. If no candidates remain, **terminate**.
+4. **Select** the best candidate using the same fairness-then-delta ordering as Section 5 (prefer cycles involving residents with fewest accepted swaps so far; break ties by total $\Delta U$).
+5. **Present** the candidate to the operator on the command line, showing each participant, the shift given, the shift received, and the individual $\Delta U$.
+6. The operator responds with `y` (accept) or `N` (deny):
+   - **Accepted:** apply the cycle to the schedule, lock its shift uids, increment the beneficiary's participation counter, record in the accepted log.
+   - **Denied:** add the cycle's exact swap signature to $\mathcal{R}$; the schedule is unchanged. Return to step 1 so the next-best candidate is proposed.
+7. The session ends when all remaining candidates are either blacklisted or capped. The accepted-swap log is printed and the HTML report is written.
+
+Because the graph is rebuilt from the mutated schedule after each accepted swap, Live mode does **not** provide the full-independence guarantee of the batch optimizer (Proposition 5 in Section 6). Instead it provides the same sequential guarantee as the original iterative solver: each accepted swap was Pareto-improving and ACGME-legal against the schedule at the moment it was proposed, and each swap's shifts are locked so no shift is ever traded twice.
+
+### 9.2 Rejection Blacklist
+
+A denied swap is identified by its **exact swap key**: the frozen set of $(giver, shift\_given, shift\_received)$ triples that constitute the cycle. Using a frozenset makes the key invariant to cycle rotation (the same three-way trade written starting from a different node maps to the same key). The blacklist $\mathcal{R}$ is maintained in memory for the duration of the session; it is not persisted across runs.
+
+The blacklist ensures that:
+- The operator is never shown the same swap twice in a session.
+- After a denial the graph rebuild surfaces the next-best alternative rather than immediately re-proposing the same cycle.
+- If all remaining Pareto-improving candidates are blacklisted, the session terminates cleanly.
+
+### 9.3 Comparison with Batch Mode
+
+| Property | Batch mode | Live mode |
+|---|---|---|
+| Graph built | Once, against original | Each iteration, against current |
+| Human review | None | Every swap |
+| Full-independence guarantee | Yes (Proposition 5) | No (sequential only) |
+| Rejection memory | N/A | In-session blacklist |
+| Output | HTML + CLI log | HTML + CLI log (accepted swaps only) |
+
+---
+
+## 10. Conclusion
+
+We framed resident schedule improvement not as a re-optimization problem but as a *trade discovery* problem, and solved it with a bounded, Pareto-improving cycle mechanism on a directed trade graph. The result is a tool that respects the existing schedule, never harms anyone, never breaks the rules, and explains every recommendation it makes. Two parameters, the swap budget $K$ and the cycle length $n_{\max}$, let a program control how many swaps are executed. The optional Live mode extends the tool into an interactive decision-support system, letting a chief resident vet each proposed trade in real time while retaining all hard-constraint and Pareto guarantees for the swaps that are accepted.

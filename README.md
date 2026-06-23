@@ -4,12 +4,26 @@ ShiftMaxxer is a tool designed to discover mutually beneficial shift trades amon
 
 ## How the Algorithm Works
 
-The exchange mechanism operates through a directed trade graph where each shift is a node. 
+The exchange mechanism operates through a directed trade graph where each shift is a node.
 
 1. **Graph Construction.** The algorithm draws an edge from shift A to shift B if the owner of shift A is willing and able to trade for shift B. An edge exists only if the swap maintains schedule legality, respects the owner's day-off requests, and does not decrease their satisfaction.
 2. **Cycle Search.** The algorithm searches for cycles in the graph up to a maximum length (typically 2 or 3). A 2-cycle represents a direct swap between two residents. A 3-cycle represents a three-way rotation.
 3. **Greedy Execution.** The algorithm identifies all valid cycles that are strictly Pareto-improving, meaning at least one resident is happier and no resident is worse off. It executes the trade with the highest utility gain first, updates the schedule, and rebuilds the trade graph.
 4. **Termination.** This process repeats until no further Pareto-improving trades can be found, or until participants reach their individual swap budgets.
+
+ShiftMaxxer supports two execution modes that differ in how trades are selected and applied:
+
+### Batch Mode (default)
+
+The optimizer builds the trade graph once against a fixed snapshot of the original schedule, enumerates all valid Pareto-improving cycles, and selects a shift-disjoint set using a greedy pass with an all-subset independence check. Any subset of the selected trades can be applied in any order and is guaranteed to be ACGME-legal and utility-non-worsening for all participants. All selected trades are applied automatically without user intervention.
+
+### Live Mode (`--live`)
+
+The optimizer runs iteratively: it rebuilds the trade graph from the current schedule at each step, picks the single highest-gain Pareto-improving cycle, and pauses to display it on the command line and ask for confirmation before applying it. This allows a chief resident or coordinator to review each proposed swap individually and approve or reject it in real time.
+
+- **Rejection memory.** Any swap that is denied is recorded by its exact move set and is never proposed again in the same session, so the next-best candidate surfaces on the following iteration.
+- **Termination.** The session ends when all remaining candidates have been either blacklisted through rejection or exhausted by per-person participation caps.
+- **Output.** After the interactive session concludes, the accepted-swap log is printed to the terminal and the HTML report is written, reflecting only the approved trades.
 
 ## Guarantees
 
@@ -32,8 +46,8 @@ The project is structured as follows:
   - [feasibility.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/feasibility.py): Verification of ACGME duty-hour compliance.
   - [utility.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/utility.py): Utility functions calculating satisfaction scores.
   - [graph.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/graph.py): Construction of the directed trade graph.
-  - [optimizer.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/optimizer.py): The cycle detection and greedy trade execution loop.
-  - [report.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/report.py): Plain text formatting for execution logs.
+  - [optimizer.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/optimizer.py): Cycle detection and trade execution — both the batch single-snapshot optimizer and the iterative Live mode solver.
+  - [report.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/report.py): Plain text formatting for execution logs and the CLI confirmation prompt used in Live mode.
   - [render.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/render.py): HTML report generator.
 - [data/](file:///Users/roshanlodha/Documents/shiftmaxxer/data): Input schedules and preferences.
   - `ics/`: Input calendar files in iCalendar format.
@@ -59,10 +73,17 @@ To set up the environment and run the optimizer:
    python main.py -K 2 -n 2 --html customized_report.html
    ```
 
+4. Run in Live mode to review and confirm each proposed swap interactively:
+   ```bash
+   python main.py --live
+   ```
+
     Key arguments:
-    - `-K`, `--max-swaps-per-person`: The maximum number of swaps any single resident can be charged with as the primary beneficiary (default: 3). Swaps where the resident is a passive participant (their partner benefits more) do not count towards their budget. Use -1 for unlimited.
+    - `-K`, `--max-swaps-per-person`: The maximum number of swaps any single resident can be charged with as the primary beneficiary (default: unlimited). Use -1 for unlimited.
     - `-n`, `--max-cycle`: The maximum cycle length to search for (2 for 1-for-1 swaps, 3 to include three-way rotations).
     - `--allow-jeopardy-swaps`: Allow jeopardy or backup shifts to participate in trading.
+    - `--live`: Enable Live mode. Each proposed swap is displayed on the command line and must be confirmed (`y`) or rejected (`N`) before the algorithm proceeds. Rejected swaps are permanently blacklisted for the session.
+    - `--html`: Output path for the HTML report (default: `shiftswap.html`).
 
     Additional settings:
     - `START_DATE` (in `shiftmaxxer/config.py`): Scheduled shifts occurring before this date (e.g., June 29, 2026) are ignored and excluded from trading.

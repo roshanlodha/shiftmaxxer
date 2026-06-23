@@ -1,6 +1,8 @@
 from __future__ import annotations
+from collections import Counter
 from dataclasses import dataclass
 from itertools import combinations
+from typing import Callable
 from .graph import build_trade_graph, find_cycles
 from .utility import utility
 from .feasibility import is_valid_swap
@@ -181,3 +183,70 @@ def optimize(sched: Schedule, max_swaps_per_person: int, n_max: int) -> list[Cyc
         apply_cycle(trade, sched)
 
     return selected
+
+
+def swap_key(result: CycleResult) -> frozenset[tuple[str, str, str]]:
+    """Canonical identity for a swap: invariant to cycle rotation."""
+    return frozenset(result.moves)
+
+
+def optimize_live(
+    sched: Schedule,
+    max_swaps_per_person: int,
+    n_max: int,
+    confirm: Callable[[CycleResult, Schedule], bool],
+    rejected: set[frozenset] | None = None,
+) -> list[CycleResult]:
+    """Iterative best-cycle solver with human-in-the-loop confirmation.
+
+    At each iteration the trade graph is rebuilt from the current schedule,
+    the single best Pareto-improving cycle is proposed, and ``confirm`` is
+    called.  If confirmed it is applied and its shifts are locked.  If denied
+    the swap's key is added to ``rejected`` so it is never proposed again.
+    The loop ends when no new, unblacklisted, cap-respecting candidate exists.
+    """
+    if rejected is None:
+        rejected = set()
+
+    swap_count: Counter = Counter()
+    locked: set[str] = set()
+    log: list[CycleResult] = []
+
+    while True:
+        G = build_trade_graph(sched, locked)
+        candidates: list[CycleResult] = []
+        for cyc in find_cycles(G, n_max):
+            res = evaluate_cycle(cyc, sched)
+            if res is None:
+                continue
+            if swap_key(res) in rejected:
+                continue
+            if max_swaps_per_person != -1:
+                beneficiary = max(sorted(res.deltas.keys()), key=lambda n: res.deltas[n])
+                if swap_count[beneficiary] + 1 > max_swaps_per_person:
+                    continue
+            candidates.append(res)
+
+        if not candidates:
+            break
+
+        # Fairness: prefer cycles involving residents with fewest swaps so far.
+        min_swaps = min(swap_count.get(n, 0) for n in sched.assignment)
+        priority = [r for r in candidates
+                    if any(swap_count.get(n, 0) == min_swaps for n in r.deltas)]
+        pool = priority if priority else candidates
+        pool.sort(key=lambda r: r.total_delta, reverse=True)
+        best = pool[0]
+
+        if confirm(best, sched):
+            apply_cycle(best, sched)
+            for _, u, v in best.moves:
+                locked.add(u)
+                locked.add(v)
+            beneficiary = max(sorted(best.deltas.keys()), key=lambda n: best.deltas[n])
+            swap_count[beneficiary] += 1
+            log.append(best)
+        else:
+            rejected.add(swap_key(best))
+
+    return log
