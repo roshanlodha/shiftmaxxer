@@ -26,6 +26,9 @@ def build_trade_graph(sched: Schedule) -> nx.DiGraph:
             # Jeopardy ↔ regular cross-trading is never allowed.
             if su.is_jeopardy != sv.is_jeopardy:
                 continue
+            # Overnight ↔ non-overnight cross-trading is never allowed.
+            if (su.type == "Overnight") != (sv.type == "Overnight"):
+                continue
             if sv.work_date in ri.days_off:        # explicit day-off rejection
                 continue
             proposed = [s for s in base_shifts[i] if s.uid != u] + [sv]

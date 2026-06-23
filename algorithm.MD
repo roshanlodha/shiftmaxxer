@@ -56,6 +56,8 @@ Some shifts are *attribute-agnostic*. Backup ("jeopardy") shifts have no meaning
 
 **Jeopardy swap isolation.** To prevent cross-type trades that would transform a light backup shift into a full clinical shift (or vice versa), jeopardy shifts may only be swapped with other jeopardy shifts. Regular (non-jeopardy) shifts may only be swapped with other regular shifts. When the toggle `ALLOW_JEOPARDY_SWAPS` is set to `False`, jeopardy shifts are pinned: they are excluded from the trade graph entirely and never participate in any trade.
 
+**Overnight shift isolation.** Overnight shifts may only be traded with other overnight shifts; they are never swappable with Morning or Swing shifts. This prevents a trade from converting a night shift into a day shift (or vice versa), which would silently alter the on-duty overnight staffing level that the base schedule was designed to maintain.
+
 ### 2.2 Individual utility
 
 Weights are normalized per resident so that $w_{\text{loc},i}+w_{\text{type},i}+w_{\text{str},i}=1$. This normalization is necessary to place every resident's happiness on a common $[0,1]$ scale. It ensures that gains are comparable across residents and that the mechanism does not systematically favor residents who enter larger raw weights. The total utility is
@@ -89,6 +91,8 @@ $$
 \iff
 \mathrm{jeop}(u)=\mathrm{jeop}(v)
 \;\wedge\;
+\mathbb{1}[\mathrm{type}(u)=\text{Overnight}]=\mathbb{1}[\mathrm{type}(v)=\text{Overnight}]
+\;\wedge\;
 V(A_i')=1
 \;\wedge\;
 \mathrm{date}(v)\notin \text{DaysOff}_i
@@ -96,7 +100,7 @@ V(A_i')=1
 U_i(A_i')\ge U_i(A_i).
 $$
 
-In words: the edge exists only if $u$ and $v$ are of the same type (both jeopardy or both regular), receiving $v$ keeps resident $i$ legal, respects their days off, and does not lower their utility.
+In words: the edge exists only if $u$ and $v$ are of the same type (both jeopardy or both regular), both are overnight or both are non-overnight, receiving $v$ keeps resident $i$ legal, respects their days off, and does not lower their utility.
 
 When `ALLOW_JEOPARDY_SWAPS` is `False`, jeopardy shifts are removed from the node set entirely and cannot appear on either side of any edge.
 
