@@ -1673,8 +1673,7 @@ function renderPrefs() {
     return '<div class="pref-row">'
       + '<div class="pref-lbl-row">'
       + '<span class="pref-lbl"><i data-lucide="timer" style="width:16px; height:16px;"></i>Hours Worked</span>'
-      + '<span class="pref-val">' + orig.toFixed(1) + ' &rarr; ' + opt.toFixed(1) + ' hrs'
-      + ' <span style="color:' + color + '; font-weight:800;">(' + deltaStr + ' hrs)</span>'
+      + '<span class="pref-val">' + orig.toFixed(1) + ' &rarr; <span style="color:' + color + '; font-weight:800;">' + opt.toFixed(1) + ' hrs</span>'
       + '</span>'
       + '</div>'
       + '</div>';
