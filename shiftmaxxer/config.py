@@ -50,3 +50,8 @@ IGNORE_WEIGHT = False
 # Empty string corresponds to allowing all dates, otherwise should be a datetime object.
 # Before this date, all scheduled shifts should be tossed out.
 START_DATE = datetime(2026, 6, 29)
+
+# --- Shift Length Swap Penalty Weight ---
+# Penalty for swapping a shift with a longer shift: (curr utility - (weight * additional_shift_time)).
+# Set to 0.0 to restore the existing behavior.
+TIME_DIFF_WEIGHT = 0.02

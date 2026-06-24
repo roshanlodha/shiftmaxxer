@@ -1,289 +1,279 @@
 from __future__ import annotations
 
 import json
-import queue
-import threading
-import urllib.error
-import urllib.request
-import uuid
-from collections import Counter
 from pathlib import Path
-
 import pandas as pd
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, session, redirect, url_for
 
 import shiftmaxxer.config as config
-from shiftmaxxer.graph import build_trade_graph, find_cycles
-from shiftmaxxer.ingest import _extract_gdrive_id, load_all_ics, load_preferences
+from shiftmaxxer.ingest import build_schedule
+from shiftmaxxer.render import render_html
 from shiftmaxxer.models import Resident, Schedule
-from shiftmaxxer.optimizer import CycleResult, apply_cycle, evaluate_cycle, swap_key
-from shiftmaxxer.render import _fmt_time, build_payload, render_html
+from shiftmaxxer.optimizer import CycleResult
+
+# Import database helpers
+from shiftmaxxer.database import (
+    init_db, reset_db_run, get_settings, update_settings,
+    authenticate_user, change_password, save_initial_schedule,
+    load_schedule_from_db, get_swap_counts, get_locked_shifts,
+    get_rejected_trades, add_rejected_trade, propose_trades,
+    get_all_trades_for_iteration, cast_vote, check_and_advance_iteration,
+    get_original_assignment, get_full_trade_history_log
+)
 
 app = Flask(__name__)
-app.secret_key = "shiftmaxxer-live-dev"
+app.secret_key = "shiftmaxxer-live-dev-secure-key"
 
-ICS_DIR = Path("data/ics")
 PREFS_CSV = Path("data/preferences.csv")
+ICS_DIR = Path("data/ics")
 
-# In-memory session store — single-user dev tool, no persistence needed.
-SESSIONS: dict[str, dict] = {}
-
-
-# ---------------------------------------------------------------------------
-# Background setup: download ICS files and build schedule
-# ---------------------------------------------------------------------------
-
-def _setup_bg(session_id: str, progress_q: "queue.Queue[dict]",
-              max_swaps: int, n_max: int, allow_jeopardy: bool) -> None:
-    """Run in a background thread. Emits dicts onto progress_q."""
-    try:
-        df = pd.read_csv(PREFS_CSV)
-        expected = ["timestamp", "resident", "location_pref", "time_pref",
-                    "days_off", "location_weight", "time_weight",
-                    "days_pref", "days_weight", "calendar_ics"]
-        if len(df.columns) == len(expected):
-            df.columns = expected
-
-        ICS_DIR.mkdir(parents=True, exist_ok=True)
-        rows = [(str(r["resident"]).strip(), str(r.get("calendar_ics", "")).strip())
-                for _, r in df.iterrows()]
-        total = len(rows)
-
-        for i, (name, url) in enumerate(rows):
-            dest = ICS_DIR / f"{name}.ics"
-            if dest.exists():
-                progress_q.put({"type": "download", "name": name,
-                                 "status": "cached", "done": i + 1, "total": total})
-                continue
-            fid = _extract_gdrive_id(url) if url and url != "nan" else None
-            if not fid:
-                progress_q.put({"type": "download", "name": name,
-                                 "status": "skipped", "done": i + 1, "total": total})
-                continue
-            progress_q.put({"type": "download", "name": name,
-                             "status": "downloading", "done": i, "total": total})
-            dl = f"https://drive.google.com/uc?export=download&id={fid}"
-            try:
-                urllib.request.urlretrieve(dl, dest)
-                progress_q.put({"type": "download", "name": name,
-                                 "status": "done", "done": i + 1, "total": total})
-            except urllib.error.URLError as exc:
-                progress_q.put({"type": "download", "name": name,
-                                 "status": "error", "error": str(exc),
-                                 "done": i + 1, "total": total})
-
-        progress_q.put({"type": "build", "message": "Parsing ICS files…"})
-        if allow_jeopardy:
-            config.ALLOW_JEOPARDY_SWAPS = True
-
-        shifts_list = load_all_ics(ICS_DIR)
-        residents = load_preferences(PREFS_CSV)
-        shifts = {s.uid: s for s in shifts_list}
-        assignment: dict[str, set[str]] = {name: set() for name in residents}
-        for s in shifts_list:
-            assignment.setdefault(s.owner, set()).add(s.uid)
-        for owner in assignment:
-            if owner not in residents:
-                residents[owner] = Resident(owner, "ANY", 0, "ANY", 0, 4, 0, frozenset())
-        sched = Schedule(assignment=assignment, shifts=shifts, residents=residents)
-        orig = {n: set(uids) for n, uids in sched.assignment.items()}
-
-        progress_q.put({"type": "build", "message": "Building trade graph…"})
-        G = build_trade_graph(sched, set())
-        n_candidates = sum(
-            1 for cyc in find_cycles(G, n_max)
-            if evaluate_cycle(cyc, sched) is not None
-        )
-
-        SESSIONS[session_id].update({
-            "sched": sched,
-            "original_assignment": orig,
-            "locked": set(),
-            "swap_count": Counter(),
-            "rejected": set(),
-            "log": [],
-            "pending_swap": None,
-            "status": "ready",
-            "max_swaps": max_swaps,
-            "n_max": n_max,
-            "accepted": 0,
-            "rejected_count": 0,
-        })
-        progress_q.put({"type": "ready", "candidates": n_candidates})
-
-    except Exception as exc:
-        import traceback
-        progress_q.put({"type": "error", "message": str(exc),
-                        "trace": traceback.format_exc()})
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _next_candidate(session: dict) -> CycleResult | None:
-    sched = session["sched"]
-    G = build_trade_graph(sched, session["locked"])
-    candidates: list[CycleResult] = []
-    for cyc in find_cycles(G, session["n_max"]):
-        res = evaluate_cycle(cyc, sched)
-        if res is None:
-            continue
-        if swap_key(res) in session["rejected"]:
-            continue
-        ms = session["max_swaps"]
-        if ms != -1:
-            ben = max(sorted(res.deltas.keys()), key=lambda n: res.deltas[n])
-            if session["swap_count"][ben] + 1 > ms:
-                continue
-        candidates.append(res)
-    if not candidates:
-        return None
-    min_sw = min(session["swap_count"].get(n, 0) for n in sched.assignment)
-    priority = [r for r in candidates
-                if any(session["swap_count"].get(n, 0) == min_sw for n in r.deltas)]
-    pool = priority if priority else candidates
-    pool.sort(key=lambda r: r.total_delta, reverse=True)
-    return pool[0]
-
-
-def _serialize_swap(result: CycleResult, sched: Schedule) -> dict:
-    moves = []
-    for giver, u, v in result.moves:
-        su, sv = sched.shifts[u], sched.shifts[v]
-        moves.append({
-            "giver": giver,
-            "giveUid": u,
-            "giveSummary": su.summary,
-            "giveDate": su.work_date.isoformat(),
-            "giveLoc": su.loc,
-            "giveType": su.type,
-            "giveStart": _fmt_time(su.t_start),
-            "giveEnd": _fmt_time(su.t_end),
-            "recvUid": v,
-            "recvSummary": sv.summary,
-            "recvDate": sv.work_date.isoformat(),
-            "recvLoc": sv.loc,
-            "recvType": sv.type,
-            "recvStart": _fmt_time(sv.t_start),
-            "recvEnd": _fmt_time(sv.t_end),
-            "delta": round(result.deltas.get(giver, 0), 4),
-        })
-    return {"totalDelta": round(result.total_delta, 4), "moves": moves}
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
+# Initialize database on startup
+init_db()
 
 @app.route("/")
 def index():
     return render_template("live.html")
 
+# --- Authentication APIs ---
 
-@app.route("/api/init", methods=["POST"])
-def api_init():
+@app.route("/api/login", methods=["POST"])
+def api_login():
     data = request.get_json(force=True) or {}
-    sid = str(uuid.uuid4())
-    max_swaps = int(data.get("maxSwaps", -1))
-    n_max = int(data.get("nMax", 2))
-    allow_jeopardy = bool(data.get("allowJeopardy", False))
-
-    pq: queue.Queue = queue.Queue()
-    SESSIONS[sid] = {"status": "loading", "progress_q": pq}
-
-    threading.Thread(
-        target=_setup_bg,
-        args=(sid, pq, max_swaps, n_max, allow_jeopardy),
-        daemon=True,
-    ).start()
-    return jsonify({"sessionId": sid})
-
-
-@app.route("/api/progress/<sid>")
-def api_progress(sid):
-    if sid not in SESSIONS:
-        return Response(
-            'data: {"type":"error","message":"Session not found"}\n\n',
-            mimetype="text/event-stream",
-        )
-
-    def generate():
-        q = SESSIONS[sid]["progress_q"]
-        while True:
-            try:
-                evt = q.get(timeout=30)
-                yield f"data: {json.dumps(evt)}\n\n"
-                if evt["type"] in ("ready", "error"):
-                    break
-            except queue.Empty:
-                yield 'data: {"type":"ping"}\n\n'
-
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.route("/api/next/<sid>")
-def api_next(sid):
-    session = SESSIONS.get(sid)
-    if not session or session.get("status") != "ready":
-        return jsonify({"error": "Session not ready"}), 400
-
-    cand = _next_candidate(session)
-    if cand is None:
-        session["status"] = "done"
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+        
+    user = authenticate_user(username, password)
+    if user:
+        session["username"] = user["username"]
+        session["display_name"] = user["display_name"]
+        session["is_admin"] = bool(user["is_admin"])
         return jsonify({
-            "type": "done",
-            "accepted": session["accepted"],
-            "rejected": session["rejected_count"],
+            "ok": True,
+            "user": {
+                "username": user["username"],
+                "display_name": user["display_name"],
+                "is_admin": bool(user["is_admin"])
+            }
         })
-
-    session["pending_swap"] = cand
-    return jsonify({"type": "swap", "swap": _serialize_swap(cand, session["sched"])})
-
-
-@app.route("/api/decide/<sid>", methods=["POST"])
-def api_decide(sid):
-    session = SESSIONS.get(sid)
-    if not session or session.get("status") != "ready":
-        return jsonify({"error": "Session not ready"}), 400
-
-    data = request.get_json(force=True) or {}
-    decision = data.get("decision")
-    cand: CycleResult | None = session.get("pending_swap")
-
-    if cand is None:
-        return jsonify({"error": "No pending swap"}), 400
-
-    if decision == "accept":
-        apply_cycle(cand, session["sched"])
-        for _, u, v in cand.moves:
-            session["locked"].add(u)
-            session["locked"].add(v)
-        ben = max(sorted(cand.deltas.keys()), key=lambda n: cand.deltas[n])
-        session["swap_count"][ben] += 1
-        session["log"].append(cand)
-        session["accepted"] += 1
-    elif decision == "reject":
-        session["rejected"].add(swap_key(cand))
-        session["rejected_count"] += 1
     else:
-        return jsonify({"error": "Invalid decision"}), 400
+        return jsonify({"error": "Invalid username or password"}), 401
 
-    session["pending_swap"] = None
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
     return jsonify({"ok": True})
 
+@app.route("/api/change-password", methods=["POST"])
+def api_change_password():
+    if "username" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json(force=True) or {}
+    new_password = data.get("new_password", "").strip()
+    
+    if not new_password:
+        return jsonify({"error": "New password required"}), 400
+        
+    if change_password(session["username"], new_password):
+        return jsonify({"ok": True})
+    else:
+        return jsonify({"error": "Failed to update password"}), 500
 
-@app.route("/api/report/<sid>")
-def api_report(sid):
-    session = SESSIONS.get(sid)
-    if not session or session.get("status") not in ("ready", "done"):
-        return "Session not found or not ready", 404
-    return render_html(session["sched"], session["log"], session["original_assignment"])
+@app.route("/api/residents", methods=["GET"])
+def api_residents():
+    # Helper to return a list of registered resident display names (for the dropdown)
+    import sqlite3
+    from shiftmaxxer.database import get_db_connection
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("SELECT username, display_name FROM users WHERE is_admin = 0 ORDER BY display_name ASC").fetchall()
+        return jsonify({"residents": [dict(r) for r in rows]})
+    finally:
+        conn.close()
 
+# --- Dashboard State API ---
+
+@app.route("/api/dashboard-state", methods=["GET"])
+def api_dashboard_state():
+    if "username" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    settings = get_settings()
+    if not settings:
+        return jsonify({"error": "Settings not initialized"}), 500
+        
+    username = session["username"]
+    is_admin = session["is_admin"]
+    
+    state = {
+        "status": settings["status"],
+        "current_iteration": settings["current_iteration"],
+        "max_iterations": settings["max_iterations"],
+        "max_swaps": settings["max_swaps"],
+        "n_max": settings["n_max"],
+        "allow_jeopardy": bool(settings["allow_jeopardy"]),
+        "user": {
+            "username": username,
+            "display_name": session["display_name"],
+            "is_admin": is_admin
+        }
+    }
+    
+    # Load trade history/log
+    history = []
+    for r in get_full_trade_history_log():
+        history.append({
+            "iteration": r["iteration"],
+            "trade_data": r["trade_data"]
+        })
+    state["history_log"] = history
+    
+    if is_admin:
+        # Admin gets everything for the current iteration
+        state["all_trades"] = get_all_trades_for_iteration(settings["current_iteration"])
+        state["swap_counts"] = dict(get_swap_counts())
+        state["locked_count"] = len(get_locked_shifts())
+        state["rejected_count"] = len(get_rejected_trades())
+    else:
+        # Resident gets only trades involving them in the current iteration
+        all_iter_trades = get_all_trades_for_iteration(settings["current_iteration"])
+        user_trades = []
+        for t in all_iter_trades:
+            involved_residents = set(move[0] for move in t["trade_data"]["moves"])
+            if username in involved_residents:
+                # Add user's specific vote status
+                user_trades.append({
+                    "id": t["id"],
+                    "total_delta": t["total_delta"],
+                    "trade_data": t["trade_data"],
+                    "status": t["status"],
+                    "my_vote": t["votes"].get(username, "pending"),
+                    "votes": t["votes"] # to show other people's voting status
+                })
+        state["user_trades"] = user_trades
+        
+    return jsonify(state)
+
+# --- Voting API ---
+
+@app.route("/api/vote", methods=["POST"])
+def api_vote():
+    if "username" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    data = request.get_json(force=True) or {}
+    trade_id = data.get("trade_id")
+    decision = data.get("decision")
+    
+    if trade_id is None or not decision:
+        return jsonify({"error": "trade_id and decision required"}), 400
+        
+    res = cast_vote(trade_id, session["username"], decision)
+    if not res["ok"]:
+        return jsonify(res), 400
+        
+    # Check if this completed the iteration, and advance if so
+    check_and_advance_iteration()
+    
+    return jsonify({"ok": True})
+
+# --- Admin Operations APIs ---
+
+@app.route("/api/admin/initialize", methods=["POST"])
+def api_admin_initialize():
+    if not session.get("is_admin"):
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    # Check if a preferences file was uploaded
+    if "preferences" in request.files:
+        file = request.files["preferences"]
+        if file.filename != "":
+            PREFS_CSV.parent.mkdir(parents=True, exist_ok=True)
+            file.save(PREFS_CSV)
+            
+    # Get parameters
+    max_swaps = int(request.form.get("maxSwaps", -1))
+    n_max = int(request.form.get("nMax", 2))
+    allow_jeopardy = 1 if request.form.get("allowJeopardy") == "true" else 0
+    max_iterations = int(request.form.get("maxIterations", 20))
+    
+    try:
+        # Reset DB run (retains admin credentials but clears schedules, settings, and other users)
+        reset_db_run()
+        
+        # Save settings (status is 'running', current_iteration is 0 to bootstrap)
+        update_settings(
+            max_swaps=max_swaps,
+            n_max=n_max,
+            allow_jeopardy=allow_jeopardy,
+            max_iterations=max_iterations,
+            status="running",
+            current_iteration=0
+        )
+        
+        # Build schedule and download calendars (this downloads ICS files to data/ics)
+        if allow_jeopardy:
+            config.ALLOW_JEOPARDY_SWAPS = True
+        else:
+            config.ALLOW_JEOPARDY_SWAPS = False
+            
+        sched = build_schedule(ICS_DIR, PREFS_CSV)
+        save_initial_schedule(sched)
+        
+        # Call check_and_advance_iteration() to bootstrap the first iteration (0 -> 1)
+        check_and_advance_iteration()
+        
+        return jsonify({"ok": True})
+        
+    except Exception as exc:
+        import traceback
+        return jsonify({
+            "error": str(exc),
+            "trace": traceback.format_exc()
+        }), 500
+
+@app.route("/api/admin/stop", methods=["POST"])
+def api_admin_stop():
+    if not session.get("is_admin"):
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    update_settings(
+        max_swaps=-1,
+        n_max=2,
+        allow_jeopardy=0,
+        max_iterations=20,
+        status="idle",
+        current_iteration=0
+    )
+    return jsonify({"ok": True})
+
+# --- Report API ---
+
+@app.route("/api/report")
+def api_report():
+    # Open report to any logged-in user (admin or resident)
+    if "username" not in session:
+        return redirect(url_for("index"))
+        
+    sched = load_schedule_from_db()
+    original_assignment = get_original_assignment()
+    
+    # Load and deserialize the trade log
+    log = []
+    for r in get_full_trade_history_log():
+        td = r["trade_data"]
+        moves = [tuple(m) for m in td["moves"]]
+        log.append(CycleResult(
+            cycle=td["cycle"],
+            deltas=td["deltas"],
+            total_delta=td["total_delta"],
+            moves=moves
+        ))
+        
+    return render_html(sched, log, original_assignment)
 
 if __name__ == "__main__":
     app.run(debug=True, threaded=True)

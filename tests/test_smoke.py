@@ -14,16 +14,16 @@ def test_load_preferences_normalization():
         # Roshan has MGH (weight 1), Morning (weight 0.5), days_weight 1.
         # Under IGNORE_WEIGHT = True, all three are overridden to 1.0.
         # Sum = 3.0. Normalized weights should be 1/3 each.
-        roshan = residents["roshan"]
-        assert abs(roshan.loc_weight - 1/3) < 1e-6
-        assert abs(roshan.type_weight - 1/3) < 1e-6
-        assert abs(roshan.days_weight - 1/3) < 1e-6
+        roshan = residents["roshan lodha"]
+        assert abs(roshan.loc_weight - 0.5) < 1e-6
+        assert abs(roshan.type_weight - 0.0) < 1e-6
+        assert abs(roshan.days_weight - 0.5) < 1e-6
 
         # Justin has BWH (weight 1), Swing (weight 1), days_weight 1.
         # Under IGNORE_WEIGHT = True, all three are 1.0.
         # Sum = 3.0. Normalized weights should be 1/3 each.
-        if "justin" in residents:
-            justin = residents["justin"]
+        if "justin yang" in residents:
+            justin = residents["justin yang"]
             assert abs(justin.loc_weight - 1/3) < 1e-6
             assert abs(justin.type_weight - 1/3) < 1e-6
             assert abs(justin.days_weight - 1/3) < 1e-6
@@ -46,7 +46,7 @@ def test_resident_metrics_payload():
     log = optimize(sched, max_swaps_per_person=-1, n_max=2)
     payload = build_payload(sched, log, original_assignment)
     
-    roshan = payload["residents"]["roshan"]
+    roshan = payload["residents"]["roshan lodha"]
     assert "loc" in roshan
     assert "orig" in roshan["loc"]
     assert "opt" in roshan["loc"]
@@ -309,6 +309,94 @@ def test_trades_are_independently_executable():
                 assert utility(proposed, r) >= orig_util[name] - 1e-9, (
                     f"Subset of size {size} lowers {name}'s utility"
                 )
+
+
+def test_time_diff_weight():
+    """Verify that TIME_DIFF_WEIGHT correctly penalizes/rewards shift length differences."""
+    from datetime import date, datetime, timedelta
+    from dateutil import tz
+    from shiftmaxxer import config
+    from shiftmaxxer.models import Resident, Shift, Schedule
+    from shiftmaxxer.utility import utility
+
+    LOCAL = tz.gettz("America/New_York")
+    
+    # 1. Setup Resident and mock shifts
+    r = Resident(
+        name="alice",
+        loc_pref="MGH",
+        loc_weight=1.0,  # 100% location weight
+        type_pref="ANY",
+        type_weight=0.0,
+        days_pref=4,
+        days_weight=0.0,
+        days_off=frozenset(),
+        orig_hours=18.0
+    )
+    
+    s1 = Shift(
+        uid="s1", owner="alice",
+        t_start=datetime(2026, 7, 1, 7, 0, tzinfo=LOCAL),
+        t_end=datetime(2026, 7, 1, 16, 0, tzinfo=LOCAL),  # 9 hours
+        loc="MGH", type="Morning", work_date=date(2026, 7, 1),
+        summary="test", is_jeopardy=False
+    )
+    s2 = Shift(
+        uid="s2", owner="alice",
+        t_start=datetime(2026, 7, 2, 7, 0, tzinfo=LOCAL),
+        t_end=datetime(2026, 7, 2, 17, 0, tzinfo=LOCAL),  # 10 hours
+        loc="MGH", type="Morning", work_date=date(2026, 7, 2),
+        summary="test", is_jeopardy=False
+    )
+    
+    # Total hours: 19.0 (1.0 hour more than orig_hours of 18.0)
+    shifts = [s1, s2]
+    
+    # Base utility should be 1.0 (since all locations match MGH, weights sum to 1.0)
+    
+    orig_weight = config.TIME_DIFF_WEIGHT
+    try:
+        # A. When weight is 0.0, utility has no penalty
+        config.TIME_DIFF_WEIGHT = 0.0
+        assert abs(utility(shifts, r) - 1.0) < 1e-9
+        
+        # B. When weight is 0.1, utility has a penalty of 0.1 * 1.0 = 0.1
+        config.TIME_DIFF_WEIGHT = 0.1
+        assert abs(utility(shifts, r) - 0.9) < 1e-9
+        
+        # C. Test reward when shifts are shorter (e.g. 17.0 hours total)
+        s2_short = Shift(
+            uid="s2", owner="alice",
+            t_start=datetime(2026, 7, 2, 7, 0, tzinfo=LOCAL),
+            t_end=datetime(2026, 7, 2, 15, 0, tzinfo=LOCAL),  # 8 hours (total 17.0 hours)
+            loc="MGH", type="Morning", work_date=date(2026, 7, 2),
+            summary="test", is_jeopardy=False
+        )
+        assert abs(utility([s1, s2_short], r) - 1.1) < 1e-9
+        
+        # 2. Verify that Schedule __post_init__ computes orig_hours correctly when Resident orig_hours is 0.0
+        r_manual = Resident(
+            name="alice",
+            loc_pref="MGH",
+            loc_weight=1.0,
+            type_pref="ANY",
+            type_weight=0.0,
+            days_pref=4,
+            days_weight=0.0,
+            days_off=frozenset(),
+            orig_hours=0.0
+        )
+        sched = Schedule(
+            assignment={"alice": {"s1", "s2"}},
+            shifts={"s1": s1, "s2": s2},
+            residents={"alice": r_manual}
+        )
+        # s1 (9 hours) + s2 (10 hours) = 19.0 hours
+        assert abs(r_manual.orig_hours - 19.0) < 1e-9
+
+    finally:
+        config.TIME_DIFF_WEIGHT = orig_weight
+
 
 
 

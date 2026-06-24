@@ -84,6 +84,9 @@ def _resident_metrics(r: Resident, orig_shifts: list[Shift], final_shifts: list[
         "daysPref": r.days_pref,
         "daysWeight": r.days_weight,
         "daysOff": [d.isoformat() for d in sorted(r.days_off)],
+        "locWeight": r.loc_weight,
+        "typeWeight": r.type_weight,
+        "origHours": r.orig_hours,
         "loc": {
             "orig": round(phi_loc(orig_shifts, r) * 100),
             "opt": round(phi_loc(final_shifts, r) * 100),
@@ -122,7 +125,7 @@ def build_payload(sched: Schedule, log: list[CycleResult],
         curr += timedelta(days=1)
 
     swaps: dict = {n: [] for n in sched.residents}
-    for res in log:
+    for cycle_idx, res in enumerate(log):
         # Build recv_uid -> giver map for partner lookup
         recv_to_giver = {v: giver for giver, u, v in res.moves}
         for giver, u, v in res.moves:
@@ -130,6 +133,7 @@ def build_payload(sched: Schedule, log: list[CycleResult],
             # The partner is whoever gives away the shift we receive
             partner = recv_to_giver.get(u, "")
             swaps[giver].append({
+                "cycleId": cycle_idx,
                 "giveUid": u,
                 "giveSummary": su.summary,
                 "giveDate": su.work_date.isoformat(),
@@ -168,6 +172,11 @@ def build_payload(sched: Schedule, log: list[CycleResult],
 def render_html(sched: Schedule, log: list[CycleResult],
                 original_assignment: dict) -> str:
     payload = build_payload(sched, log, original_assignment)
+    from .config import STREAK_BETA, TIME_DIFF_WEIGHT
+    payload["config"] = {
+        "STREAK_BETA": STREAK_BETA,
+        "TIME_DIFF_WEIGHT": TIME_DIFF_WEIGHT,
+    }
     data_js = "const DATA = " + json.dumps(payload, indent=2) + ";"
     return _TEMPLATE.replace("/*__INJECT_DATA__*/", data_js)
 
@@ -976,6 +985,40 @@ body {
 .swap-card.neg-card { border-top: 4px solid var(--md-sys-color-error); }
 .swap-card.neu-card { border-top: 4px solid var(--md-sys-color-outline); }
 
+/* Rejected/Excluded Swaps Styling */
+.swap-card.rejected-card {
+  opacity: 0.45;
+  filter: grayscale(60%);
+  border-top-color: var(--md-sys-color-outline-variant) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.swap-card.rejected-card .delta-pill {
+  background: var(--md-sys-color-surface-container-high) !important;
+  color: var(--md-sys-color-on-surface-variant) !important;
+  border-color: var(--md-sys-color-outline-variant) !important;
+}
+.reject-swap-btn {
+  background: transparent;
+  border: none;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--md-sys-shape-corner-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+.reject-swap-btn:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: var(--md-sys-color-error);
+}
+.reject-swap-btn.restore:hover {
+  background-color: rgba(45, 212, 191, 0.12);
+  color: var(--md-sys-color-tertiary);
+}
+
 .swap-card-hdr {
   padding: 12px 16px;
   display: flex;
@@ -1430,6 +1473,145 @@ let weekOffset = 0; // weeks from the "anchor" week (first week with any shift)
 let anchorMonday = null; // Date object for Monday of anchor week
 let viewMode = 'optimal'; // 'optimal' or 'original'
 
+const rejectedCycleIds = new Set();
+
+function getTimeline() {
+  const dates = Object.values(DATA.shifts).map(s => s.workDate).sort();
+  if (dates.length === 0) return [];
+  const start = new Date(dates[0] + 'T00:00:00');
+  const end = new Date(dates[dates.length - 1] + 'T00:00:00');
+  const timeline = [];
+  let curr = new Date(start);
+  while (curr <= end) {
+    timeline.push(dateToIso(curr));
+    curr.setDate(curr.getDate() + 1);
+  }
+  return timeline;
+}
+
+function getOffStreaks(timeline, workedDates) {
+  const runs = [];
+  let currentRun = 0;
+  for (const d of timeline) {
+    if (!workedDates.has(d)) {
+      currentRun++;
+    } else {
+      if (currentRun > 0) {
+        runs.push(currentRun);
+        currentRun = 0;
+      }
+    }
+  }
+  if (currentRun > 0) {
+    runs.push(currentRun);
+  }
+  return runs;
+}
+
+function getWorkStreaks(workDates) {
+  if (workDates.size === 0) return [];
+  const ordered = Array.from(workDates).sort();
+  const lengths = [];
+  let run = 1;
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const prev = new Date(ordered[i] + 'T00:00:00');
+    const cur = new Date(ordered[i+1] + 'T00:00:00');
+    const diffDays = Math.round((cur - prev) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) {
+      run++;
+    } else {
+      lengths.push(run);
+      run = 1;
+    }
+  }
+  lengths.push(run);
+  return lengths;
+}
+
+function recomputeAllMetrics() {
+  const currentAssignment = {};
+  for (const name in DATA.residents) {
+    currentAssignment[name] = new Set(DATA.originalAssignment[name] || []);
+  }
+  for (const name in DATA.swaps) {
+    DATA.swaps[name].forEach(sw => {
+      if (!rejectedCycleIds.has(sw.cycleId)) {
+        currentAssignment[name].delete(sw.giveUid);
+        currentAssignment[name].add(sw.recvUid);
+      }
+    });
+  }
+  window.currentAssignment = currentAssignment;
+
+  const timeline = getTimeline();
+
+  for (const name in DATA.residents) {
+    const r = DATA.residents[name];
+    const uids = currentAssignment[name];
+    const shiftsList = Array.from(uids).map(uid => DATA.shifts[uid]).filter(Boolean);
+
+    const located = shiftsList.filter(s => s.loc !== null && s.loc !== undefined);
+    let locOpt = 1.0;
+    if (r.locPref !== "ANY" && located.length > 0) {
+      locOpt = located.filter(s => s.loc === r.locPref).length / located.length;
+    }
+    r.loc.opt = Math.round(locOpt * 100);
+
+    const typed = shiftsList.filter(s => s.type !== null && s.type !== undefined);
+    let typeOpt = 1.0;
+    if (r.typePref !== "ANY" && typed.length > 0) {
+      typeOpt = typed.filter(s => s.type === r.typePref).length / typed.length;
+    }
+    r.type.opt = Math.round(typeOpt * 100);
+
+    const workedDates = new Set(shiftsList.map(s => s.workDate));
+    const runs = getOffStreaks(timeline, workedDates);
+    const avgOff = runs.length ? runs.reduce((a, b) => a + b, 0) / runs.length : 0.0;
+    r.streak.opt = Math.round(avgOff * 10) / 10;
+
+    let hoursOpt = 0;
+    shiftsList.forEach(s => {
+      let duration = 0;
+      if (s.endHour >= s.startHour) {
+        duration = s.endHour - s.startHour;
+      } else {
+        duration = (s.endHour + 24) - s.startHour;
+      }
+      hoursOpt += duration;
+    });
+    r.hours.opt = Math.round(hoursOpt * 10) / 10;
+
+    const workRuns = getWorkStreaks(workedDates);
+    let phiStrVal = 1.0;
+    if (workRuns.length > 0) {
+      let sumDev = 0;
+      workRuns.forEach(L => {
+        sumDev += Math.abs(L - r.daysPref);
+      });
+      const meanDev = sumDev / workRuns.length;
+      const streakBeta = DATA.config.STREAK_BETA;
+      phiStrVal = Math.max(0.0, 1.0 - meanDev / streakBeta);
+    }
+
+    const baseUtility = r.locWeight * locOpt + r.typeWeight * typeOpt + r.daysWeight * phiStrVal;
+    let finalUtility = baseUtility;
+    if (DATA.config.TIME_DIFF_WEIGHT !== 0.0) {
+      const additionalShiftTime = hoursOpt - r.origHours;
+      finalUtility = baseUtility - (DATA.config.TIME_DIFF_WEIGHT * additionalShiftTime);
+    }
+    r.happiness.opt = Math.round(finalUtility * 100);
+  }
+}
+
+function toggleRejectSwap(cycleId) {
+  if (rejectedCycleIds.has(cycleId)) {
+    rejectedCycleIds.delete(cycleId);
+  } else {
+    rejectedCycleIds.add(cycleId);
+  }
+  render();
+}
+
 function isoToDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -1503,6 +1685,7 @@ function init() {
 }
 
 function render() {
+  recomputeAllMetrics();
   renderHappiness();
   renderPrefs();
   renderWeek();
@@ -1705,11 +1888,12 @@ function renderPrefs() {
 /* ── Week View ── */
 function renderWeek() {
   const orig = new Set(DATA.originalAssignment[cur] || []);
-  const final = new Set(DATA.finalAssignment[cur] || []);
-  const gives = new Set((DATA.swaps[cur] || []).map(s => s.giveUid));
-  const recvs = new Set((DATA.swaps[cur] || []).map(s => s.recvUid));
+  const current = window.currentAssignment ? (window.currentAssignment[cur] || new Set()) : new Set(DATA.finalAssignment[cur] || []);
+  const activeSwaps = (DATA.swaps[cur] || []).filter(s => !rejectedCycleIds.has(s.cycleId));
+  const gives = new Set(activeSwaps.map(s => s.giveUid));
+  const recvs = new Set(activeSwaps.map(s => s.recvUid));
   
-  const visibleUids = viewMode === 'optimal' ? final : (viewMode === 'original' ? orig : new Set([...orig, ...final]));
+  const visibleUids = viewMode === 'optimal' ? current : (viewMode === 'original' ? orig : new Set([...orig, ...current]));
 
   const dm = {};
   visibleUids.forEach(uid => {
@@ -1933,16 +2117,25 @@ function renderSwaps() {
       const partnerDeltaLabel = isPartnerPos ? '+' + partnerPct + '% (' + cap(sw.swapWith) + ')' : isPartnerNeg ? partnerPct + '% (' + cap(sw.swapWith) + ')' : 'Neutral (' + cap(sw.swapWith) + ')';
       const partnerDpClass = isPartnerPos ? 'pos' : isPartnerNeg ? 'neg' : 'neu';
 
-      const cardClass = isPos ? 'pos-card' : isNeg ? 'neg-card' : 'neu-card';
-      const hdrClass = isPos ? 'pos' : isNeg ? 'neg' : 'neu';
+      const isRejected = rejectedCycleIds.has(sw.cycleId);
+      const cardClass = isRejected ? 'rejected-card' : (isPos ? 'pos-card' : isNeg ? 'neg-card' : 'neu-card');
+      const hdrClass = isRejected ? 'neu' : (isPos ? 'pos' : isNeg ? 'neg' : 'neu');
       const partnerName = sw.swapWith ? cap(sw.swapWith) : 'Partner';
+
+      const btnIcon = isRejected ? 'rotate-ccw' : 'x';
+      const btnTitle = isRejected ? 'Restore Swap' : 'Reject Swap';
+      const btnClass = isRejected ? 'reject-swap-btn restore' : 'reject-swap-btn';
 
       return '<div class="swap-card ' + cardClass + '">'
         + '<div class="swap-card-hdr ' + hdrClass + '">'
         + '<div class="card-hdr-left" style="display:flex; flex-direction:column; gap:4px;">'
+        + '<div style="display: flex; align-items: center; gap: 8px;">'
         + '<div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--md-sys-color-on-surface-variant)">Swap ' + (i+1) + '</div>'
+        + (isRejected ? '<span class="sb-badge badge-recv" style="background:var(--md-sys-color-error-container); color:var(--md-sys-color-on-error-container); font-size:0.65rem; padding: 1px 6px;">Rejected</span>' : '')
+        + '</div>'
         + '<div class="swap-with-badge"><i data-lucide="arrow-left-right" style="width:14px; height:14px;"></i>with <span class="partner-name partner-chip">' + partnerName + '</span></div>'
         + '</div>'
+        + '<div style="display: flex; align-items: center; gap: 12px;">'
         + '<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">'
         + '<span class="delta-pill ' + dpClass + '">' 
         + (isPos ? '<i data-lucide="trending-up" style="width:14px; height:14px;"></i>' : isNeg ? '<i data-lucide="trending-down" style="width:14px; height:14px;"></i>' : '')
@@ -1950,6 +2143,10 @@ function renderSwaps() {
         + '<span class="delta-pill ' + partnerDpClass + '">' 
         + (isPartnerPos ? '<i data-lucide="trending-up" style="width:14px; height:14px;"></i>' : isPartnerNeg ? '<i data-lucide="trending-down" style="width:14px; height:14px;"></i>' : '')
         + partnerDeltaLabel + '</span>'
+        + '</div>'
+        + '<button class="' + btnClass + '" title="' + btnTitle + '" onclick="toggleRejectSwap(' + sw.cycleId + ')">'
+        + '<i data-lucide="' + btnIcon + '" style="width:18px; height:18px;"></i>'
+        + '</button>'
         + '</div>'
         + '</div>'
         + '<div class="card-body">'

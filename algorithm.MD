@@ -68,6 +68,20 @@ U_i(A_i)=w_{\text{loc},i}\,\phi_{\text{loc}}(A_i)
         +w_{\text{str},i}\,\phi_{\text{str}}(A_i)\;\in[0,1].
 $$
 
+### 2.3 Hours-difference penalty (implemented)
+
+A 1-for-1 swap conserves shift *count* but not necessarily shift *hours*: trading an 8-hour morning shift for a 10-hour swing shift hands the receiving resident two additional hours of work without surfacing in any of the three preference scores above. To discourage such asymmetric exchanges, a configurable linear penalty is subtracted from the base utility:
+
+$$
+U_i^{\text{adj}}(A_i)
+  = U_i(A_i)
+  - w_{\Delta h}\,\bigl(H(A_i)-H_i^{\text{orig}}\bigr),
+$$
+
+where $H(A_i)=\sum_{s\in A_i}(t_{\text{end}}(s)-t_{\text{start}}(s))$ in hours, $H_i^{\text{orig}}$ is the resident's total hours in the original schedule, and $w_{\Delta h}$ is the tunable scalar `TIME_DIFF_WEIGHT` (default `0.02`; set to `0.0` to restore the unpenalized behavior). A positive penalty shrinks utility when a resident ends up with more hours than they started with, and symmetrically rewards shedding hours. Because the penalty is applied identically to the pre-trade and post-trade evaluations used in the per-edge and per-cycle Pareto tests, the mechanism will not accept a trade that hands a resident significantly more hours unless the gain in location, time, or streak preference is large enough to compensate.
+
+**Remark on boundedness.** Unlike the three phi scores, the adjusted utility $U_i^{\text{adj}}$ can fall slightly outside $[0,1]$ when the hours delta is large. The core guarantees of Section 6 are unaffected: they depend only on the Pareto condition $U_i^{\text{adj}}(A_i')\ge U_i^{\text{adj}}(A_i)$ and the feasibility check $V(A_i')=1$, both of which remain well-defined for any real-valued monotone utility.
+
 ---
 
 ## 3. Hard Constraints
@@ -183,6 +197,8 @@ The cost of the all-subset check is $O(2^{K_{\text{pp}}})$ subsets per participa
 The current preference model rests on three dimensions: location, time of day, and streak length. Each treats a shift as an indivisible, equally-weighted unit of work. In practice, residents care not only about *where* and *when* they work but about *how much* a given shift costs them, and that cost varies systematically with shift length, the calendar position of the shift, and whether it falls overnight. The following extensions enrich the satisfaction model along these axes. Crucially, each one slots into the existing trade-graph machinery without altering the core guarantees of Section 6: as long as every new term enters $U_i$ as a bounded score and the per-edge utility test $U_i(A_i')\ge U_i(A_i)$ is preserved, Legality, Pareto improvement, Termination, and No shift chaining all continue to hold unchanged.
 
 ### 8.1 Factoring in shift lengths
+
+> **Implementation note.** A first, simpler form of duration-awareness is already live: the net-hours penalty described in Section 2.3 (`TIME_DIFF_WEIGHT`) penalizes any trade that increases a resident's total scheduled hours relative to their original schedule. The richer `phi_len` preferred-length score described below, which lets residents express an ideal per-shift duration, remains future work.
 
 **Motivation.** The mechanism currently treats a 8-hour shift and a 12-hour shift as interchangeable units. A 1-for-1 swap can therefore silently hand a resident more total hours even though workload is "conserved" in the sense of shift *count*. Residents experience a long shift as more burdensome than a short one, and a fair exchange should account for this asymmetry.
 

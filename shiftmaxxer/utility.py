@@ -1,4 +1,5 @@
 from .config import STREAK_BETA
+from . import config
 from .feasibility import _streaks
 from .models import Shift, Resident
 
@@ -29,6 +30,11 @@ def phi_str(shifts: list[Shift], r: Resident) -> float:
 
 
 def utility(shifts: list[Shift], r: Resident) -> float:
-    return (r.loc_weight  * phi_loc(shifts, r)
-          + r.type_weight * phi_type(shifts, r)
-          + r.days_weight * phi_str(shifts, r))
+    base_utility = (r.loc_weight  * phi_loc(shifts, r)
+                    + r.type_weight * phi_type(shifts, r)
+                    + r.days_weight * phi_str(shifts, r))
+    if config.TIME_DIFF_WEIGHT == 0.0:
+        return base_utility
+    curr_hours = sum((s.t_end - s.t_start).total_seconds() / 3600.0 for s in shifts)
+    additional_shift_time = curr_hours - r.orig_hours
+    return base_utility - (config.TIME_DIFF_WEIGHT * additional_shift_time)
