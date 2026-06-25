@@ -5,10 +5,10 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime, date
 
-import shiftmaxxer.config as config
-from shiftmaxxer.models import Resident, Schedule, Shift
-from shiftmaxxer.ingest import build_schedule
-from shiftmaxxer.database import (
+import shiftoptim.config as config
+from shiftoptim.models import Resident, Schedule, Shift
+from shiftoptim.ingest import build_schedule
+from shiftoptim.database import (
     DB_PATH, init_db, reset_db_run, get_settings, update_settings,
     authenticate_user, change_password, save_initial_schedule,
     load_schedule_from_db, get_swap_counts, get_locked_shifts,

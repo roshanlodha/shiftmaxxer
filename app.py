@@ -5,14 +5,14 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, Response, jsonify, render_template, request, session, redirect, url_for
 
-import shiftmaxxer.config as config
-from shiftmaxxer.ingest import build_schedule
-from shiftmaxxer.render import render_html
-from shiftmaxxer.models import Resident, Schedule
-from shiftmaxxer.optimizer import CycleResult
+import shiftoptim.config as config
+from shiftoptim.ingest import build_schedule
+from shiftoptim.render import render_html
+from shiftoptim.models import Resident, Schedule
+from shiftoptim.optimizer import CycleResult
 
 # Import database helpers
-from shiftmaxxer.database import (
+from shiftoptim.database import (
     init_db, reset_db_run, get_settings, update_settings,
     authenticate_user, change_password, save_initial_schedule,
     load_schedule_from_db, get_swap_counts, get_locked_shifts,
@@ -22,7 +22,7 @@ from shiftmaxxer.database import (
 )
 
 app = Flask(__name__)
-app.secret_key = "shiftmaxxer-live-dev-secure-key"
+app.secret_key = "shiftoptim-live-dev-secure-key"
 
 PREFS_CSV = Path("data/preferences.csv")
 ICS_DIR = Path("data/ics")
@@ -86,7 +86,7 @@ def api_change_password():
 def api_residents():
     # Helper to return a list of registered resident display names (for the dropdown)
     import sqlite3
-    from shiftmaxxer.database import get_db_connection
+    from shiftoptim.database import get_db_connection
     conn = get_db_connection()
     try:
         rows = conn.execute("SELECT username, display_name FROM users WHERE is_admin = 0 ORDER BY display_name ASC").fetchall()

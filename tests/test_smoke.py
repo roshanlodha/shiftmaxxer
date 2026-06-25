@@ -1,8 +1,8 @@
 from pathlib import Path
-from shiftmaxxer.ingest import load_preferences, build_schedule
-from shiftmaxxer.optimizer import optimize
-from shiftmaxxer.render import render_html
-import shiftmaxxer.config as config
+from shiftoptim.ingest import load_preferences, build_schedule
+from shiftoptim.optimizer import optimize
+from shiftoptim.render import render_html
+import shiftoptim.config as config
 
 def test_load_preferences_normalization():
     # Keep track of the original config setting
@@ -15,9 +15,9 @@ def test_load_preferences_normalization():
         # Under IGNORE_WEIGHT = True, all three are overridden to 1.0.
         # Sum = 3.0. Normalized weights should be 1/3 each.
         roshan = residents["roshan lodha"]
-        assert abs(roshan.loc_weight - 0.5) < 1e-6
-        assert abs(roshan.type_weight - 0.0) < 1e-6
-        assert abs(roshan.days_weight - 0.5) < 1e-6
+        assert abs(roshan.loc_weight - 1/3) < 1e-6
+        assert abs(roshan.type_weight - 1/3) < 1e-6
+        assert abs(roshan.days_weight - 1/3) < 1e-6
 
         # Justin has BWH (weight 1), Swing (weight 1), days_weight 1.
         # Under IGNORE_WEIGHT = True, all three are 1.0.
@@ -40,7 +40,7 @@ def test_end_to_end_pipeline():
     assert "class=\"md3-segmented-button" in html
 
 def test_resident_metrics_payload():
-    from shiftmaxxer.render import build_payload
+    from shiftoptim.render import build_payload
     sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     log = optimize(sched, max_swaps_per_person=-1, n_max=2)
@@ -65,7 +65,7 @@ def test_resident_metrics_payload():
             assert "partnerDelta" in sw
 
 def test_midnight_shift_end_hour():
-    from shiftmaxxer.render import build_payload
+    from shiftoptim.render import build_payload
     sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     payload = build_payload(sched, [], original_assignment)
@@ -82,7 +82,7 @@ def test_midnight_shift_end_hour():
 
 def test_work_streak_calculation():
     from datetime import date, timedelta
-    from shiftmaxxer.feasibility import _streaks
+    from shiftoptim.feasibility import _streaks
     
     worked = {
         date(2026, 6, 22),
@@ -106,7 +106,7 @@ def _make_shift(uid, owner, work_date, is_jeopardy=False, loc="MGH", stype="Morn
     """Helper: build a minimal Shift for unit tests."""
     from datetime import datetime, timedelta
     from dateutil import tz
-    from shiftmaxxer.models import Shift
+    from shiftoptim.models import Shift
     LOCAL = tz.gettz("America/New_York")
     t_start = datetime(work_date.year, work_date.month, work_date.day, 7, 0, tzinfo=LOCAL)
     t_end = t_start + timedelta(hours=9)
@@ -121,8 +121,8 @@ def _make_shift(uid, owner, work_date, is_jeopardy=False, loc="MGH", stype="Morn
 def test_jeopardy_isolation_no_cross_type_edges():
     """Jeopardy shifts must never have trade-graph edges to/from regular shifts."""
     from datetime import date
-    from shiftmaxxer.models import Resident, Schedule
-    from shiftmaxxer.graph import build_trade_graph
+    from shiftoptim.models import Resident, Schedule
+    from shiftoptim.graph import build_trade_graph
 
     d1, d2 = date(2026, 7, 1), date(2026, 7, 2)
     s_reg = _make_shift("reg1", "alice", d1, is_jeopardy=False, loc="BWH")
@@ -151,8 +151,8 @@ def test_jeopardy_isolation_no_cross_type_edges():
 def test_jeopardy_swaps_enabled_same_type():
     """Two jeopardy shifts owned by different residents CAN form edges."""
     from datetime import date
-    from shiftmaxxer.models import Resident, Schedule
-    from shiftmaxxer.graph import build_trade_graph
+    from shiftoptim.models import Resident, Schedule
+    from shiftoptim.graph import build_trade_graph
 
     d1, d2 = date(2026, 7, 1), date(2026, 7, 2)
     s1 = _make_shift("j1", "alice", d1, is_jeopardy=True)
@@ -182,8 +182,8 @@ def test_jeopardy_swaps_enabled_same_type():
 def test_jeopardy_swaps_disabled_pins_shifts():
     """When ALLOW_JEOPARDY_SWAPS is False, jeopardy shifts have zero edges."""
     from datetime import date
-    from shiftmaxxer.models import Resident, Schedule
-    from shiftmaxxer.graph import build_trade_graph
+    from shiftoptim.models import Resident, Schedule
+    from shiftoptim.graph import build_trade_graph
 
     d1, d2 = date(2026, 7, 1), date(2026, 7, 2)
     s1 = _make_shift("j1", "alice", d1, is_jeopardy=True)
@@ -251,7 +251,7 @@ def test_swap_limit_enforced_for_beneficiary():
 
 
 def test_swap_sorting_by_max_happiness():
-    from shiftmaxxer.render import build_payload
+    from shiftoptim.render import build_payload
     sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     # Let's get some log of swaps
@@ -271,8 +271,8 @@ def test_trades_are_independently_executable():
     ACGME-legal and leave no participant's utility below their original value.
     This is the core independence guarantee of the new optimizer."""
     from itertools import combinations
-    from shiftmaxxer.feasibility import is_valid_swap
-    from shiftmaxxer.utility import utility
+    from shiftoptim.feasibility import is_valid_swap
+    from shiftoptim.utility import utility
 
     sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
     orig_uids = {n: set(uids) for n, uids in sched.assignment.items()}
@@ -315,9 +315,9 @@ def test_time_diff_weight():
     """Verify that TIME_DIFF_WEIGHT correctly penalizes/rewards shift length differences."""
     from datetime import date, datetime, timedelta
     from dateutil import tz
-    from shiftmaxxer import config
-    from shiftmaxxer.models import Resident, Shift, Schedule
-    from shiftmaxxer.utility import utility
+    from shiftoptim import config
+    from shiftoptim.models import Resident, Shift, Schedule
+    from shiftoptim.utility import utility
 
     LOCAL = tz.gettz("America/New_York")
     

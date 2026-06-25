@@ -1,6 +1,6 @@
-# ShiftMaxxer: Resident Shift Scheduling Exchange
+# Shift Optimizer: Resident Shift Scheduling Exchange
 
-ShiftMaxxer is a tool designed to discover mutually beneficial shift trades among emergency medicine residents. Rather than rebuilding a schedule from scratch, this tool takes an existing schedule and identifies voluntary swaps that increase resident satisfaction without violating hard constraints.
+Shift Optimizer is a tool designed to discover mutually beneficial shift trades among emergency medicine residents. Rather than rebuilding a schedule from scratch, this tool takes an existing schedule and identifies voluntary swaps that increase resident satisfaction without violating hard constraints.
 
 ## How the Algorithm Works
 
@@ -11,7 +11,7 @@ The exchange mechanism operates through a directed trade graph where each shift 
 3. **Greedy Execution.** The algorithm identifies all valid cycles that are strictly Pareto-improving, meaning at least one resident is happier and no resident is worse off. It executes the trade with the highest utility gain first, updates the schedule, and rebuilds the trade graph.
 4. **Termination.** This process repeats until no further Pareto-improving trades can be found, or until participants reach their individual swap budgets.
 
-ShiftMaxxer supports two execution modes that differ in how trades are selected and applied:
+Shift Optimizer supports two execution modes that differ in how trades are selected and applied:
 
 ### Batch Mode (default)
 
@@ -27,7 +27,7 @@ The optimizer runs iteratively: it rebuilds the trade graph from the current sch
 
 ### Web Live-Voting Mode (`app.py`)
 
-A browser-based alternative to CLI live mode. The Flask app (`app.py`) serves a dashboard where each resident logs in and votes to accept or reject proposed swaps. An admin initializes the session, sets optimizer parameters, and monitors progress. The app persists schedule state and votes in a local SQLite database via `shiftmaxxer/database.py`, so the session survives server restarts.
+A browser-based alternative to CLI live mode. The Flask app (`app.py`) serves a dashboard where each resident logs in and votes to accept or reject proposed swaps. An admin initializes the session, sets optimizer parameters, and monitors progress. The app persists schedule state and votes in a local SQLite database via `shiftoptim/database.py`, so the session survives server restarts.
 
 ```bash
 python app.py
@@ -50,17 +50,17 @@ The project is structured as follows:
 - [main.py](file:///Users/roshanlodha/Documents/shiftmaxxer/main.py): Command-line entrypoint for the batch and CLI live-mode optimizer.
 - [app.py](file:///Users/roshanlodha/Documents/shiftmaxxer/app.py): Flask web application for browser-based live voting mode.
 - [requirements.txt](file:///Users/roshanlodha/Documents/shiftmaxxer/requirements.txt): Python dependencies.
-- [shiftmaxxer/](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer): The core Python package containing scheduling logic.
-  - [config.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/config.py): Configuration settings and defaults (including `START_DATE` and `TIME_DIFF_WEIGHT`).
-  - [models.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/models.py): Data structures for shifts, schedules, and residents.
-  - [ingest.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/ingest.py): Logic to parse ICS calendar files and preference CSVs.
-  - [feasibility.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/feasibility.py): Verification of ACGME duty-hour compliance.
-  - [utility.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/utility.py): Satisfaction score and adjusted utility calculation (including the hours-difference penalty).
-  - [graph.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/graph.py): Construction of the directed trade graph.
-  - [optimizer.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/optimizer.py): Cycle detection and trade execution — both the batch single-snapshot optimizer and the iterative Live mode solver.
-  - [database.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/database.py): SQLite persistence layer for the web live-voting mode (schedule state, votes, trade history).
-  - [report.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/report.py): Plain text formatting for execution logs and the CLI confirmation prompt used in Live mode.
-  - [render.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftmaxxer/render.py): HTML report generator.
+- [shiftoptim/](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim): The core Python package containing scheduling logic.
+  - [config.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/config.py): Configuration settings and defaults (including `START_DATE` and `TIME_DIFF_WEIGHT`).
+  - [models.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/models.py): Data structures for shifts, schedules, and residents.
+  - [ingest.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/ingest.py): Logic to parse ICS calendar files and preference CSVs.
+  - [feasibility.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/feasibility.py): Verification of ACGME duty-hour compliance.
+  - [utility.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/utility.py): Satisfaction score and adjusted utility calculation (including the hours-difference penalty).
+  - [graph.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/graph.py): Construction of the directed trade graph.
+  - [optimizer.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/optimizer.py): Cycle detection and trade execution — both the batch single-snapshot optimizer and the iterative Live mode solver.
+  - [database.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/database.py): SQLite persistence layer for the web live-voting mode (schedule state, votes, trade history).
+  - [report.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/report.py): Plain text formatting for execution logs and the CLI confirmation prompt used in Live mode.
+  - [render.py](file:///Users/roshanlodha/Documents/shiftmaxxer/shiftoptim/render.py): HTML report generator.
 - [templates/](file:///Users/roshanlodha/Documents/shiftmaxxer/templates): Jinja2 HTML templates served by the Flask app.
 - [data/](file:///Users/roshanlodha/Documents/shiftmaxxer/data): Input schedules and preferences.
   - `ics/`: Input calendar files in iCalendar format.
@@ -99,5 +99,5 @@ To set up the environment and run the optimizer:
     - `--html`: Output path for the HTML report (default: `shiftswap.html`).
 
     Additional settings:
-    - `START_DATE` (in `shiftmaxxer/config.py`): Scheduled shifts occurring before this date (e.g., June 29, 2026) are ignored and excluded from trading.
-    - `TIME_DIFF_WEIGHT` (in `shiftmaxxer/config.py`): Linear penalty subtracted from a resident's utility for each net additional hour gained vs. their original schedule. Default `0.02`. Set to `0.0` to disable the penalty and treat all shift lengths as equal.
+    - `START_DATE` (in `shiftoptim/config.py`): Scheduled shifts occurring before this date (e.g., June 29, 2026) are ignored and excluded from trading.
+    - `TIME_DIFF_WEIGHT` (in `shiftoptim/config.py`): Linear penalty subtracted from a resident's utility for each net additional hour gained vs. their original schedule. Default `0.02`. Set to `0.0` to disable the penalty and treat all shift lengths as equal.

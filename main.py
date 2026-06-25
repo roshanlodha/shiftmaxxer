@@ -1,11 +1,11 @@
 import argparse
 from pathlib import Path
-from shiftmaxxer.ingest import build_schedule
-from shiftmaxxer.optimizer import optimize, optimize_live
-from shiftmaxxer.report import format_log, cli_confirm
-from shiftmaxxer.render import render_html
-from shiftmaxxer.config import DEFAULT_MAX_SWAPS_PER_PERSON, ALLOW_MULTI_SWAPS
-import shiftmaxxer.config as config
+from shiftoptim.ingest import build_schedule
+from shiftoptim.optimizer import optimize, optimize_live
+from shiftoptim.report import format_log, cli_confirm
+from shiftoptim.render import render_html
+from shiftoptim.config import DEFAULT_MAX_SWAPS_PER_PERSON, ALLOW_MULTI_SWAPS
+import shiftoptim.config as config
 
 
 def main():
