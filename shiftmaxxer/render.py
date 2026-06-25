@@ -969,7 +969,7 @@ body {
   background: var(--md-sys-color-surface-container-low);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-corner-medium);
-  overflow: hidden;
+  position: relative;
   transition: transform 0.2s var(--md-sys-motion-easing-emphasized),
               box-shadow 0.2s var(--md-sys-motion-easing-emphasized),
               border-color 0.2s;
@@ -999,24 +999,34 @@ body {
   border-color: var(--md-sys-color-outline-variant) !important;
 }
 .reject-swap-btn {
-  background: transparent;
-  border: none;
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 32px;
+  height: 32px;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
   color: var(--md-sys-color-on-surface-variant);
   cursor: pointer;
-  padding: 6px;
-  border-radius: var(--md-sys-shape-corner-full);
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s, color 0.2s;
+  box-shadow: var(--md-sys-elevation-shadow-1);
+  transition: background-color 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s;
+  z-index: 10;
 }
 .reject-swap-btn:hover {
-  background-color: rgba(239, 68, 68, 0.12);
-  color: var(--md-sys-color-error);
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+  transform: scale(1.1);
+  box-shadow: var(--md-sys-elevation-shadow-2);
 }
 .reject-swap-btn.restore:hover {
-  background-color: rgba(45, 212, 191, 0.12);
-  color: var(--md-sys-color-tertiary);
+  background-color: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  transform: scale(1.1);
+  box-shadow: var(--md-sys-elevation-shadow-2);
 }
 
 .swap-card-hdr {
@@ -1025,6 +1035,8 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  border-top-left-radius: calc(var(--md-sys-shape-corner-medium) - 1px);
+  border-top-right-radius: calc(var(--md-sys-shape-corner-medium) - 1px);
 }
 .swap-card-hdr.pos { background: linear-gradient(90deg, rgba(45, 212, 191, 0.08), transparent); }
 .swap-card-hdr.neg { background: linear-gradient(90deg, rgba(239, 68, 68, 0.08), transparent); }
