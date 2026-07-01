@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import networkx as nx
 from .feasibility import is_valid_swap
 from .utility import utility

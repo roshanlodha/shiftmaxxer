@@ -70,7 +70,12 @@ def is_valid_swap(proposed: list[Shift], current: list[Shift],
     rest violations (e.g. an 11a-8p shift followed by a next-day 7a shift = 11h
     rest); those are grandfathered. Day-off remains an absolute hard constraint:
     a proposed shift may never land on a declared day off. Overlapping shifts
-    (double-booking) are also an absolute hard constraint and are never allowed."""
+    (double-booking) are also an absolute hard constraint and are never allowed.
+    Residents also may not receive shifts beyond their current last shift date."""
+    # Personal schedule horizon: no one can extend beyond their last shift date.
+    if proposed and current:
+        if max(s.work_date for s in proposed) > max(s.work_date for s in current):
+            return False
     # Day-off: always hard, never allowed.
     for s in proposed:
         if s.work_date in days_off:

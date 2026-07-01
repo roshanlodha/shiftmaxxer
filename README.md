@@ -96,8 +96,9 @@ To set up the environment and run the optimizer:
     - `-n`, `--max-cycle`: The maximum cycle length to search for (2 for 1-for-1 swaps, 3 to include three-way rotations).
     - `--allow-jeopardy-swaps`: Allow jeopardy or backup shifts to participate in trading.
     - `--live`: Enable Live mode. Each proposed swap is displayed on the command line and must be confirmed (`y`) or rejected (`N`) before the algorithm proceeds. Rejected swaps are permanently blacklisted for the session.
+    - `--ics`: Input calendar path. Static mode defaults to the combined calendar file `data/07_27_2026.ics`; a directory of per-resident `.ics` files is still supported.
     - `--html`: Output path for the HTML report (default: `shiftswap.html`).
 
     Additional settings:
-    - `START_DATE` (in `shiftoptim/config.py`): Scheduled shifts occurring before this date (e.g., June 29, 2026) are ignored and excluded from trading.
+    - `START_DATE` (in `shiftoptim/config.py`): Scheduled shifts occurring before this date (e.g., July 27, 2026) are ignored and excluded from trading.
     - `TIME_DIFF_WEIGHT` (in `shiftoptim/config.py`): Linear penalty subtracted from a resident's utility for each net additional hour gained vs. their original schedule. Default `0.02`. Set to `0.0` to disable the penalty and treat all shift lengths as equal.

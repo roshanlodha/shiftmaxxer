@@ -2,6 +2,7 @@ from icalendar import Calendar
 from dateutil import tz
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 import pandas as pd
 import re
 import urllib.request
@@ -40,39 +41,85 @@ def parse_ics_file(path: Path, owner: str) -> list[Shift]:
     cal = Calendar.from_ical(path.read_bytes())
     shifts = []
     for comp in cal.walk("VEVENT"):
-        start = comp.decoded("DTSTART")
-        end = comp.decoded("DTEND")
-        # Ensure tz-aware in LOCAL; ICS uses fixed -0400 (EDT).
-        start = start.astimezone(LOCAL) if start.tzinfo else start.replace(tzinfo=LOCAL)
-        end = end.astimezone(LOCAL) if end.tzinfo else end.replace(tzinfo=LOCAL)
-        if config.START_DATE != "":
-            if isinstance(config.START_DATE, datetime):
-                start_filter = config.START_DATE if config.START_DATE.tzinfo else config.START_DATE.replace(tzinfo=LOCAL)
-            else:
-                start_filter = datetime.combine(config.START_DATE, datetime.min.time()).replace(tzinfo=LOCAL)
-            if start < start_filter:
-                continue
-        summary = str(comp.get("SUMMARY", ""))
-        jeop = is_jeopardy(summary)
-        shifts.append(Shift(
-            uid=str(comp.get("UID")),
-            owner=owner,
-            t_start=start,
-            t_end=end,
-            # Jeopardy shifts are location/time-agnostic -> None on both.
-            loc=None if jeop else parse_location(str(comp.get("LOCATION", ""))),
-            type=None if jeop else classify_type(start),
-            work_date=start.date(),
-            summary=summary,
-            is_jeopardy=jeop,
-        ))
+        shifts.extend(parse_ics_event(comp, owner))
     return shifts
 
 
-def load_all_ics(ics_dir: Path) -> list[Shift]:
+def _last_name(name: str) -> str:
+    parts = str(name).lower().strip().split()
+    if not parts:
+        raise ValueError(f"Can't extract last name from {name!r}")
+    return parts[-1]
+
+
+def _summary_last_name(summary: str) -> str:
+    return str(summary).rsplit(" - ", 1)[-1].lower().strip()
+
+
+def _resident_by_last_name(residents: dict[str, Resident]) -> dict[str, str]:
+    out = {}
+    for name in residents:
+        last = _last_name(name)
+        if last in out:
+            raise ValueError(
+                f"Ambiguous last name {last!r} in preferences: {out[last]!r} and {name!r}"
+            )
+        out[last] = name
+    return out
+
+
+def parse_combined_ics_file(path: Path, residents: dict[str, Resident]) -> list[Shift]:
+    """Parse a shared ICS, assigning events by the trailing last name in SUMMARY."""
+    owner_by_last = _resident_by_last_name(residents)
+    cal = Calendar.from_ical(path.read_bytes())
+    shifts = []
+    for comp in cal.walk("VEVENT"):
+        summary = str(comp.get("SUMMARY", ""))
+        owner = owner_by_last.get(_summary_last_name(summary))
+        if owner is None:
+            continue
+        shifts.extend(parse_ics_event(comp, owner, summary))
+    return shifts
+
+
+def parse_ics_event(comp, owner: str, summary: Optional[str] = None) -> list[Shift]:
+    start = comp.decoded("DTSTART")
+    end = comp.decoded("DTEND")
+    # Ensure tz-aware in LOCAL; ICS uses fixed -0400 (EDT).
+    start = start.astimezone(LOCAL) if start.tzinfo else start.replace(tzinfo=LOCAL)
+    end = end.astimezone(LOCAL) if end.tzinfo else end.replace(tzinfo=LOCAL)
+    if config.START_DATE != "":
+        if isinstance(config.START_DATE, datetime):
+            start_filter = config.START_DATE if config.START_DATE.tzinfo else config.START_DATE.replace(tzinfo=LOCAL)
+        else:
+            start_filter = datetime.combine(config.START_DATE, datetime.min.time()).replace(tzinfo=LOCAL)
+        if start < start_filter:
+            return []
+    summary = str(comp.get("SUMMARY", "")) if summary is None else summary
+    jeop = is_jeopardy(summary)
+    return [Shift(
+        uid=str(comp.get("UID")),
+        owner=owner,
+        t_start=start,
+        t_end=end,
+        # Jeopardy shifts are location/time-agnostic -> None on both.
+        loc=None if jeop else parse_location(str(comp.get("LOCATION", ""))),
+        type=None if jeop else classify_type(start),
+        work_date=start.date(),
+        summary=summary,
+        is_jeopardy=jeop,
+    )]
+
+
+def load_all_ics(ics_path: Path, residents: dict[str, Resident]) -> list[Shift]:
+    if ics_path.is_file():
+        return parse_combined_ics_file(ics_path, residents)
+
     out = []
-    for p in sorted(ics_dir.glob("*.ics")):
-        out.extend(parse_ics_file(p, owner=p.stem.lower().strip()))
+    for p in sorted(ics_path.glob("*.ics")):
+        owner = p.stem.lower().strip()
+        if owner in residents:
+            out.extend(parse_ics_file(p, owner=owner))
     return out
 
 
@@ -154,7 +201,7 @@ def load_preferences(csv_path) -> dict[str, Resident]:
     return residents
 
 
-def _extract_gdrive_id(url: str) -> str | None:
+def _extract_gdrive_id(url: str) -> Optional[str]:
     """Extract Google Drive file ID from various link formats."""
     m = re.search(r'id=([a-zA-Z0-9_-]+)', str(url))
     if m:
@@ -200,17 +247,16 @@ def download_ics_from_csv(csv_path: Path, ics_dir: Path) -> None:
 
 
 def build_schedule(ics_dir, csv_path) -> Schedule:
-    # Auto-download ICS files from Drive links in CSV.
-    download_ics_from_csv(Path(csv_path), Path(ics_dir))
-
-    shifts_list = load_all_ics(ics_dir)
     residents = load_preferences(csv_path)
+    ics_path = Path(ics_dir)
+
+    # Auto-download only for the legacy per-resident ICS directory flow.
+    if ics_path.is_dir():
+        download_ics_from_csv(Path(csv_path), ics_path)
+
+    shifts_list = load_all_ics(ics_path, residents)
     shifts = {s.uid: s for s in shifts_list}
     assignment = {name: set() for name in residents}
     for s in shifts_list:
-        assignment.setdefault(s.owner, set()).add(s.uid)
-    # Every ics owner must exist in preferences; if not, create indifferent resident.
-    for owner in assignment:
-        if owner not in residents:
-            residents[owner] = Resident(owner, "ANY", 0, "ANY", 0, 4, 0, frozenset())
+        assignment[s.owner].add(s.uid)
     return Schedule(assignment=assignment, shifts=shifts, residents=residents)

@@ -10,7 +10,7 @@ import shiftoptim.config as config
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ics", default="data/ics")
+    ap.add_argument("--ics", default="data/07_27_2026.ics")
     ap.add_argument("--prefs", default="data/preferences.csv")
     ap.add_argument("-K", "--max-swaps-per-person", type=int,
                     default=DEFAULT_MAX_SWAPS_PER_PERSON,

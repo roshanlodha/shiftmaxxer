@@ -66,18 +66,24 @@ def test_resident_metrics_payload():
 
 def test_midnight_shift_end_hour():
     from shiftoptim.render import build_payload
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
-    original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
-    payload = build_payload(sched, [], original_assignment)
-    
-    # Brian has 73048cf3-ec0a-48cc-933b-598134e736cf (BWH Jr. - Exe Jr 3p-12a)
-    # which starts at 3:00 PM on 2026-07-03 and ends at 12:00 AM on 2026-07-04.
-    # Its endHour should be overridden to 24.0.
-    target_uid = "73048cf3-ec0a-48cc-933b-598134e736cf"
-    assert target_uid in payload["shifts"]
-    s = payload["shifts"][target_uid]
-    assert s["startHour"] == 15.0
-    assert s["endHour"] == 24.0
+    from datetime import datetime
+    orig_start_date = config.START_DATE
+    try:
+        config.START_DATE = datetime(2026, 6, 29)
+        sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+        original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
+        payload = build_payload(sched, [], original_assignment)
+        
+        # Brian has 73048cf3-ec0a-48cc-933b-598134e736cf (BWH Jr. - Exe Jr 3p-12a)
+        # which starts at 3:00 PM on 2026-07-03 and ends at 12:00 AM on 2026-07-04.
+        # Its endHour should be overridden to 24.0.
+        target_uid = "73048cf3-ec0a-48cc-933b-598134e736cf"
+        assert target_uid in payload["shifts"]
+        s = payload["shifts"][target_uid]
+        assert s["startHour"] == 15.0
+        assert s["endHour"] == 24.0
+    finally:
+        config.START_DATE = orig_start_date
 
 
 def test_work_streak_calculation():
@@ -229,6 +235,72 @@ def test_start_date_filtering():
         # Verify that shifts before June 29 are now included
         has_earlier = any(s.t_start < datetime(2026, 6, 29, tzinfo=s.t_start.tzinfo) for s in sched_all.shifts.values())
         assert has_earlier, "Should have shifts before June 29 when START_DATE is empty"
+    finally:
+        config.START_DATE = orig_start_date
+
+
+def test_swap_cannot_extend_resident_past_last_shift_date():
+    from datetime import date
+    from shiftoptim.feasibility import is_valid_swap
+
+    current = [
+        _make_shift("early", "roshan", date(2026, 8, 1)),
+        _make_shift("last", "roshan", date(2026, 8, 9)),
+    ]
+    proposed_after_last = [
+        _make_shift("early", "roshan", date(2026, 8, 1)),
+        _make_shift("future", "sara", date(2026, 8, 14)),
+    ]
+    proposed_on_last = [
+        _make_shift("early", "roshan", date(2026, 8, 1)),
+        _make_shift("same-last", "sara", date(2026, 8, 9)),
+    ]
+
+    assert not is_valid_swap(proposed_after_last, current, frozenset())
+    assert is_valid_swap(proposed_on_last, current, frozenset())
+
+
+def test_combined_ics_filters_to_preferences_and_maps_last_names(tmp_path):
+    from datetime import datetime
+    orig_start_date = config.START_DATE
+    try:
+        config.START_DATE = datetime(2026, 7, 27)
+        prefs = tmp_path / "preferences.csv"
+        prefs.write_text(
+            "\n".join([
+                "Timestamp,Name,Preferred Location,Preferred Shift Time,Days Needed Off (MM/DD/YYYY),Location Weight,Time Weight,Consecutive Days Worked,Streak Weight,Calendar iCS",
+                "6/23/26 11:49,Roshan Lodha,MGH,Morning,,5,5,No preference,1,",
+            ]),
+            encoding="utf-8",
+        )
+        combined_ics = tmp_path / "combined.ics"
+        combined_ics.write_text(
+            """BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+SUMMARY:BWH Jr.  - FF Jr 3p-12a - Lodha
+UID:keep-lodha
+DTSTART:20260727T150000
+DTEND:20260728T000000
+LOCATION:BWH Junior
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:MGH Jr. - AC PGY2 7a-4p - Macrae
+UID:skip-macrae
+DTSTART:20260727T070000
+DTEND:20260727T160000
+LOCATION:MGH Junior
+END:VEVENT
+END:VCALENDAR
+""",
+            encoding="utf-8",
+        )
+
+        sched = build_schedule(combined_ics, prefs)
+        assert set(sched.residents) == {"roshan lodha"}
+        assert set(sched.shifts) == {"keep-lodha"}
+        assert sched.assignment == {"roshan lodha": {"keep-lodha"}}
+        assert sched.shifts["keep-lodha"].owner == "roshan lodha"
     finally:
         config.START_DATE = orig_start_date
 
