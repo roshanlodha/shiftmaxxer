@@ -1684,6 +1684,18 @@ function cap(s) {
   return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
+function updateAnchorMonday() {
+  const orig = DATA.originalAssignment[cur] || [];
+  const current = window.currentAssignment ? (window.currentAssignment[cur] || new Set()) : new Set(DATA.finalAssignment[cur] || []);
+  const uids = new Set([...orig, ...current]);
+  const dates = Array.from(uids).map(uid => DATA.shifts[uid]).filter(Boolean).map(s => s.workDate).sort();
+  if (dates.length) {
+    anchorMonday = getMonday(isoToDate(dates[0]));
+  } else {
+    anchorMonday = getMonday(new Date());
+  }
+}
+
 function init() {
   const names = Object.keys(DATA.residents).sort();
   const sel = document.getElementById('rsel');
@@ -1695,18 +1707,11 @@ function init() {
   });
   cur = names[0];
   sel.value = cur;
-
-  // Anchor week = Monday of first shift date across all residents
-  const allDates = Object.values(DATA.shifts).map(s => s.workDate).sort();
-  if (allDates.length) {
-    anchorMonday = getMonday(isoToDate(allDates[0]));
-  } else {
-    anchorMonday = getMonday(new Date());
-  }
+  updateAnchorMonday();
 
   document.getElementById('prev-week').addEventListener('click', () => { weekOffset--; renderWeek(); });
   document.getElementById('next-week').addEventListener('click', () => { weekOffset++; renderWeek(); });
-  sel.addEventListener('change', e => { cur = e.target.value; weekOffset = 0; render(); });
+  sel.addEventListener('change', e => { cur = e.target.value; weekOffset = 0; updateAnchorMonday(); render(); });
 
   const optBtn = document.getElementById('toggle-optimal');
   const origBtn = document.getElementById('toggle-original');

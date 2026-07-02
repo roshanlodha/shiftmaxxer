@@ -31,7 +31,7 @@ def test_load_preferences_normalization():
         config.IGNORE_WEIGHT = orig_ignore
 
 def test_end_to_end_pipeline():
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     log = optimize(sched, max_swaps_per_person=-1, n_max=2)
     html = render_html(sched, log, original_assignment)
@@ -41,7 +41,7 @@ def test_end_to_end_pipeline():
 
 def test_resident_metrics_payload():
     from shiftoptim.render import build_payload
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     log = optimize(sched, max_swaps_per_person=-1, n_max=2)
     payload = build_payload(sched, log, original_assignment)
@@ -70,17 +70,17 @@ def test_midnight_shift_end_hour():
     orig_start_date = config.START_DATE
     try:
         config.START_DATE = datetime(2026, 6, 29)
-        sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+        sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
         original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
         payload = build_payload(sched, [], original_assignment)
         
-        # Brian has 73048cf3-ec0a-48cc-933b-598134e736cf (BWH Jr. - Exe Jr 3p-12a)
-        # which starts at 3:00 PM on 2026-07-03 and ends at 12:00 AM on 2026-07-04.
+        # Wendy has ad3ab74e-f5d9-4966-8f50-edb35c7806a0 (BWH Jr.  - Exe Jr 12p-12a - Memishian)
+        # which starts at 12:00 PM on 2026-07-09 and ends at 12:00 AM on 2026-07-10.
         # Its endHour should be overridden to 24.0.
-        target_uid = "73048cf3-ec0a-48cc-933b-598134e736cf"
+        target_uid = "ad3ab74e-f5d9-4966-8f50-edb35c7806a0"
         assert target_uid in payload["shifts"]
         s = payload["shifts"][target_uid]
-        assert s["startHour"] == 15.0
+        assert s["startHour"] == 12.0
         assert s["endHour"] == 24.0
     finally:
         config.START_DATE = orig_start_date
@@ -225,13 +225,13 @@ def test_start_date_filtering():
         # Shift starting before June 29, 2026 should be filtered out.
         # Shift starting on or after June 29, 2026 should be kept.
         config.START_DATE = datetime(2026, 6, 29)
-        sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+        sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
         for s in sched.shifts.values():
             assert s.t_start >= datetime(2026, 6, 29, tzinfo=s.t_start.tzinfo)
 
         # 2. Test when START_DATE is set to empty string (allow all dates)
         config.START_DATE = ""
-        sched_all = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+        sched_all = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
         # Verify that shifts before June 29 are now included
         has_earlier = any(s.t_start < datetime(2026, 6, 29, tzinfo=s.t_start.tzinfo) for s in sched_all.shifts.values())
         assert has_earlier, "Should have shifts before June 29 when START_DATE is empty"
@@ -307,7 +307,7 @@ END:VCALENDAR
 
 def test_swap_limit_enforced_for_beneficiary():
     from collections import Counter
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
     log = optimize(sched, max_swaps_per_person=1, n_max=2)
 
     # Under the new participation cap every resident (any role) may appear in
@@ -324,7 +324,7 @@ def test_swap_limit_enforced_for_beneficiary():
 
 def test_swap_sorting_by_max_happiness():
     from shiftoptim.render import build_payload
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     # Let's get some log of swaps
     log = optimize(sched, max_swaps_per_person=-1, n_max=2)
@@ -346,7 +346,7 @@ def test_trades_are_independently_executable():
     from shiftoptim.feasibility import is_valid_swap
     from shiftoptim.utility import utility
 
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
     orig_uids = {n: set(uids) for n, uids in sched.assignment.items()}
     orig_util = {
         n: utility(sched.shifts_of(n), sched.residents[n])
@@ -471,7 +471,7 @@ def test_time_diff_weight():
 
 
 def test_complete_mode_pipeline():
-    sched = build_schedule(Path("data/ics"), Path("data/preferences.csv"))
+    sched = build_schedule(Path("data/07_27_2026.ics"), Path("data/preferences.csv"))
     original_assignment = {n: set(uids) for n, uids in sched.assignment.items()}
     log = optimize(sched, max_swaps_per_person=-1, n_max=2, complete=True)
     html = render_html(sched, log, original_assignment)
